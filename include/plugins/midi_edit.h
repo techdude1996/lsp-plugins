@@ -8,6 +8,12 @@
 
 using namespace lsp;
 
-
+class midi_edit
+{
+    public:
+        void init();
+        void destroy();
+        void process();
+};
 
 #endif /* CORE_PLUGINS_MIDI_EDIT_H_ */
