@@ -1,0 +1,4 @@
+#ifndef METADATA_MIDI_EDIT_H_
+#define METADATA_MIDI_EDIT_H_
+
+#endif /* METADATA_MIDI_EDIT_H_ */
