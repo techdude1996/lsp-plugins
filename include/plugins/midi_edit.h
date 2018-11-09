@@ -11,8 +11,11 @@ using namespace lsp;
 class midi_edit
 {
     public:
+		     midi_edit();
+		    ~midi_edit();
         void init();
         void destroy();
+		void configure();
         void process();
 };
 
