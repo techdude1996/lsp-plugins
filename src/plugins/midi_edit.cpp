@@ -14,4 +14,38 @@
 
  using namespace lsp;
 
- 
+/**
+ * Constructor
+ **/
+ midi_edit::midi_edit()
+ {
+	 lsp_trace("constructor");
+ }
+
+/**
+ * Destructor
+ **/
+ midi_edit::~midi_edit()
+ {
+	 destroy();
+ }
+
+ void midi_edit::init()
+ {
+
+ }
+
+ void midi_edit::destroy()
+ {
+	 plugin_t::destroy();
+ }
+
+ void midi_edit::configure()
+ {
+
+ }
+
+void midi_edit::process()
+{
+
+}
