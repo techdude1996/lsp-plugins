@@ -48,7 +48,10 @@ namespace neon_d32 // TODO: make constants common for all architectures
 #include <dsp/arch/arm/neon-d32/complex.h>
 #include <dsp/arch/arm/neon-d32/pcomplex.h>
 #include <dsp/arch/arm/neon-d32/convolution.h>
+
 #include <dsp/arch/arm/neon-d32/graphics.h>
+#include <dsp/arch/arm/neon-d32/graphics/effects.h>
+
 #include <dsp/arch/arm/neon-d32/pmath.h>
 #include <dsp/arch/arm/neon-d32/hmath.h>
 #include <dsp/arch/arm/neon-d32/float.h>
@@ -107,6 +110,18 @@ namespace neon_d32
 
         EXPORT1(axis_apply_log);
         EXPORT1(rgba32_to_bgra32);
+        EXPORT1(fill_rgba);
+        EXPORT1(fill_hsla);
+        EXPORT1(limit_saturate1);
+        EXPORT1(limit_saturate2);
+        EXPORT1(hsla_to_rgba);
+        EXPORT1(rgba_to_hsla);
+        EXPORT1(rgba_to_bgra32);
+
+        EXPORT1(eff_hsla_hue);
+        EXPORT1(eff_hsla_sat);
+        EXPORT1(eff_hsla_light);
+        EXPORT1(eff_hsla_alpha);
 
         EXPORT1(abs1);
         EXPORT1(abs2);
