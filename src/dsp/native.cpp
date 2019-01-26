@@ -22,6 +22,7 @@
 
 #include <dsp/arch/native/graphics.h>
 #include <dsp/arch/native/graphics/effects.h>
+#include <dsp/arch/native/graphics/interpolation.h>
 
 #include <dsp/arch/native/pmath.h>
 #include <dsp/arch/native/search.h>
@@ -58,6 +59,9 @@ namespace native
         EXPORT1(saturate);
         EXPORT1(limit_saturate1);
         EXPORT1(limit_saturate2);
+        EXPORT1(limit1);
+        EXPORT1(limit2);
+
         EXPORT1(move);
         EXPORT1(fill);
         EXPORT1(fill_one);
@@ -78,6 +82,21 @@ namespace native
         EXPORT1(abs_sub3);
         EXPORT1(abs_mul3);
         EXPORT1(abs_div3);
+
+        EXPORT1(exp1);
+        EXPORT1(exp2);
+        EXPORT1(logb1);
+        EXPORT1(logb2);
+        EXPORT1(loge1);
+        EXPORT1(loge2);
+        EXPORT1(logd1);
+        EXPORT1(logd2);
+        EXPORT1(powcv1);
+        EXPORT1(powcv2);
+        EXPORT1(powvc1);
+        EXPORT1(powvc2);
+        EXPORT1(powvx1);
+        EXPORT1(powvx2);
 
         EXPORT1(abs_normalized);
         EXPORT1(normalize);
@@ -209,7 +228,8 @@ namespace native
         EXPORT1(matched_transform_x4);
         EXPORT1(matched_transform_x8);
 
-        EXPORT1(axis_apply_log);
+        EXPORT1(axis_apply_log1);
+        EXPORT1(axis_apply_log2);
         EXPORT1(rgba32_to_bgra32);
         EXPORT1(fill_rgba);
         EXPORT1(fill_hsla);
@@ -221,6 +241,9 @@ namespace native
         EXPORT1(eff_hsla_sat);
         EXPORT1(eff_hsla_light);
         EXPORT1(eff_hsla_alpha);
+
+        EXPORT1(smooth_cubic_linear);
+        EXPORT1(smooth_cubic_log);
 
         EXPORT1(lanczos_resample_2x2);
         EXPORT1(lanczos_resample_2x3);
