@@ -6,7 +6,7 @@
  */
 
 #include <core/types.h>
-#include <core/dsp.h>
+#include <dsp/dsp.h>
 #include <core/util/Analyzer.h>
 
 #include <math.h>
@@ -186,10 +186,10 @@ namespace lsp
                         // Apply window to the temporary buffer
                         dsp::mul3(vSigRe, c->vBuffer, vWindow, fft_size);
                         // Do Real->complex conversion and FFT
-                        dsp::packed_real_to_complex(vFftReIm, vSigRe, fft_size);
+                        dsp::pcomplex_r2c(vFftReIm, vSigRe, fft_size);
                         dsp::packed_direct_fft(vFftReIm, vFftReIm, nRank);
                         // Get complex argument
-                        dsp::packed_complex_mod(vFftReIm, vFftReIm, fft_csize);
+                        dsp::pcomplex_mod(vFftReIm, vFftReIm, fft_csize);
                         // Mix with the previous value
                         dsp::mix2(c->vAmp, vFftReIm, 1.0 - fTau, fTau, fft_csize);
                     }
@@ -263,6 +263,14 @@ namespace lsp
         }
 
         return true;
+    }
+
+    float Analyzer::get_level(size_t channel, const uint32_t idx)
+    {
+        if ((vChannels == NULL) || (channel >= nChannels))
+            return 0.0f;
+
+        return vChannels[channel].vAmp[idx] * vEnvelope[idx];
     }
 
     void Analyzer::get_frequencies(float *frq, uint32_t *idx, float start, float stop, size_t count)

@@ -486,6 +486,13 @@ namespace lsp
                 vWidgets.add(mesh);
                 return new CtlMesh(this, mesh);
             }
+            case WC_FBUFFER:
+            {
+                LSPFrameBuffer *fb = new LSPFrameBuffer(&sDisplay);
+                fb->init();
+                vWidgets.add(fb);
+                return new CtlFrameBuffer(this, fb);
+            }
             case WC_TEXT:
             {
                 LSPText *text = new LSPText(&sDisplay);
@@ -525,7 +532,7 @@ namespace lsp
     status_t plugin_ui::init(IUIWrapper *wrapper, int argc, const char **argv)
     {
         // Some variables
-        char path[PATH_MAX];
+        char path[PATH_MAX + 1];
 
         // Store pointer to wrapper
         pWrapper    = wrapper;

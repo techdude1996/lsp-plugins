@@ -12,7 +12,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <string.h>
-#include <core/endian.h>
+#include <dsp/endian.h>
 
 namespace lsp
 {
@@ -434,16 +434,14 @@ namespace lsp
                         break;
 
                     case BS_NONE:
-                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_DOCK;
                         break;
 
                     case BS_POPUP:
-                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_DOCK;
+                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_MENU;
                         atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_POPUP_MENU;
                         break;
 
                     case BS_COMBO:
-                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_DOCK;
                         atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_COMBO;
                         break;
 
@@ -942,7 +940,7 @@ namespace lsp
                 unsigned long *dst  = &buffer[2];
 
                 for (size_t i=0; i<n; ++i)
-                    *(dst++) = LE_DATA(*(ptr++));
+                    *(dst++) = LE_TO_CPU(*(ptr++));
 
                 const x11_atoms_t &a = pX11Display->atoms();
 

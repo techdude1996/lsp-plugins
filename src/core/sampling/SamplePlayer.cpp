@@ -5,8 +5,7 @@
  *      Author: sadko
  */
 
-#include <core/types.h>
-#include <core/dsp.h>
+#include <dsp/dsp.h>
 #include <core/debug.h>
 #include <core/sampling/SamplePlayer.h>
 
@@ -209,15 +208,18 @@ namespace lsp
             return false;
 
         Sample     *old = vSamples[id];
-        if (old == *sample)
-        {
-            *sample     = NULL;
-            return true;
-        }
-
-        vSamples[id]    = *sample;
         if (sample != NULL)
+        {
+            Sample     *ns  = *sample;
+            if (old == ns)
+            {
+                *sample     = NULL;
+                return true;
+            }
+
+            vSamples[id]    = ns;
             *sample         = old;
+        }
 
         // Cleanup all active playbacks associated with this sample
         playback_t *pb = sActive.pHead;
@@ -346,7 +348,7 @@ namespace lsp
                 list_remove(&sActive, pb);
                 list_add_first(&sInactive, pb);
 
-                lsp_trace("freed playback %p", pb);
+//                lsp_trace("freed playback %p", pb);
             }
 
             // Iterate next playback
@@ -376,7 +378,7 @@ namespace lsp
         if (pb == NULL)
             return false;
 
-        lsp_trace("acquired playback %p", pb);
+//        lsp_trace("acquired playback %p", pb);
 
         // Now we are ready to activate sample
         pb->pSample     = s;
@@ -421,7 +423,7 @@ namespace lsp
                 pb->nFadeOffset = -delay;
                 result          ++;
 
-                lsp_trace("marked playback %p for cancelling", pb);
+//                lsp_trace("marked playback %p for cancelling", pb);
             }
 
             // Iterate to next playback

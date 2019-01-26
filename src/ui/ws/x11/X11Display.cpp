@@ -11,7 +11,7 @@
 
 #include <sys/poll.h>
 #include <errno.h>
-#include <alloca.h>
+#include <stdlib.h>
 
 #define X11IOBUF_SIZE       0x10000
 
@@ -124,7 +124,7 @@ namespace lsp
                 if (pDisplay == NULL)
                 {
                     lsp_error("Can not open display");
-                    return -1;
+                    return STATUS_NO_DEVICE;
                 }
 
                 // Get Root window and screen

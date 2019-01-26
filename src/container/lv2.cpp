@@ -2,9 +2,10 @@
 #include <time.h>
 #include <string.h>
 
+#include <core/types.h>
 #include <core/lib.h>
 #include <core/midi.h>
-#include <core/atomic.h>
+#include <dsp/atomic.h>
 #include <plugins/plugins.h>
 
 #include <data/cvector.h>
@@ -105,7 +106,7 @@ namespace lsp
 
     void lv2_run(LV2_Handle instance, uint32_t sample_count)
     {
-        dsp_context_t ctx;
+        dsp::context_t ctx;
         LV2Wrapper *w = reinterpret_cast<LV2Wrapper *>(instance);
 
         // Call the plugin for processing
@@ -148,7 +149,7 @@ namespace lsp
     {
 //        lsp_trace("handle = %p", instance);
 
-        dsp_context_t ctx;
+        dsp::context_t ctx;
         LV2_Inline_Display_Image_Surface *result;
         LV2Wrapper *wrapper = reinterpret_cast<LV2Wrapper *>(instance);
 

@@ -7,7 +7,7 @@
 
 #include <ui/tk/tk.h>
 #include <ui/tk/helpers/draw.h>
-#include <core/dsp.h>
+#include <dsp/dsp.h>
 
 namespace lsp
 {
@@ -51,8 +51,11 @@ namespace lsp
             if (result != STATUS_OK)
                 return result;
 
+            sFont.init();
             sFont.set_size(10);
             sFont.set_bold(true);
+
+            sHintFont.init();
             sHintFont.set_size(16);
             sHintFont.set_bold(true);
 

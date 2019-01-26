@@ -16,8 +16,8 @@ namespace lsp
     // Normal analog filter that does not affect any changes to the signal
     const f_cascade_t DynamicFilters::sNormal =
     {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f, 0.0f
+        { 1.0f, 0.0f, 0.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f, 0.0f }
     };
 
     DynamicFilters::DynamicFilters()
@@ -2111,16 +2111,16 @@ namespace lsp
         switch (fp->nType)
         {
             case FLT_NONE:
-                dsp::packed_complex_fill(dst, 1.0f, 0.0f, count);
+                dsp::pcomplex_fill_ri(dst, 1.0f, 0.0f, count);
                 return true;
 
             case FLT_BT_AMPLIFIER:
             case FLT_MT_AMPLIFIER:
-                dsp::packed_complex_fill(dst, gain, 0.0f, count);
+                dsp::pcomplex_fill_ri(dst, gain, 0.0f, count);
                 return true;
 
             default:
-                dsp::packed_complex_fill(dst, 1.0f, 0.0f, count);
+                dsp::pcomplex_fill_ri(dst, 1.0f, 0.0f, count);
                 break;
         }
 

@@ -25,7 +25,6 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
-#include <malloc.h>
 #include <sys/stat.h>
 #include <dirent.h>
 
@@ -33,6 +32,10 @@ namespace lsp
 {
     static const char *vst_core_paths[] =
     {
+        LSP_LIB_PREFIX("/lib"),
+        LSP_LIB_PREFIX("/lib64"),
+        LSP_LIB_PREFIX("/bin"),
+        LSP_LIB_PREFIX("/sbin"),
         "/usr/local/lib64",
         "/usr/lib64",
         "/lib64",

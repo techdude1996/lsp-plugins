@@ -698,7 +698,7 @@ namespace lsp
                 for (size_t j=0; j<nBands; ++j)
                 {
                     eq_band_t *b  = &c->vBands[j];
-                    dsp::complex_mul(c->vTrRe, c->vTrIm, c->vTrRe, c->vTrIm, b->vTrRe, b->vTrIm, para_equalizer_base_metadata::MESH_POINTS);
+                    dsp::complex_mul3(c->vTrRe, c->vTrIm, c->vTrRe, c->vTrIm, b->vTrRe, b->vTrIm, para_equalizer_base_metadata::MESH_POINTS);
                 }
                 c->nSync    = CS_SYNC_AMP;
             }
@@ -812,8 +812,8 @@ namespace lsp
             dsp::complex_mod(b->v[3], b->v[3], b->v[4], width+2);
             dsp::fill(b->v[1], 0.0f, width+2);
             dsp::fill(b->v[2], height, width+2);
-            dsp::axis_apply_log(b->v[1], b->v[2], b->v[0], zx, dx, 0.0f, width+2);
-            dsp::axis_apply_log(b->v[1], b->v[2], b->v[3], zy, 0.0f, dy, width+2);
+            dsp::axis_apply_log1(b->v[1], b->v[0], zx, dx, width+2);
+            dsp::axis_apply_log1(b->v[2], b->v[3], zy, dy, width+2);
 
             // Draw mesh
             uint32_t color = (bypassing || !(active())) ? CV_SILVER : c_colors[nMode*2 + i];
