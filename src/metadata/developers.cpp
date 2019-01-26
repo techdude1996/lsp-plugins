@@ -29,7 +29,14 @@ namespace lsp
             "https://thecrocoduckspond.wordpress.com/"
         };
 
+		const person_t e_snyder =
+		{
+			"e_snyder",
+			"techdude1996",
+			"Ethan Snyder"
+			"techrules08041@yahoo.com",
+			""
+		};
+
     }
 }
-
-

@@ -16,6 +16,7 @@ namespace lsp
     {
         extern const person_t       v_sadovnikov;
         extern const person_t       s_tronci;
+		extern const person_t		e_snyder;
     }
 }
 
