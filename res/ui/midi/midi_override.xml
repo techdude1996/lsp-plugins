@@ -1,0 +1,41 @@
+<plugin resizable="false">
+	<vbox spacing="4">
+		<ui:for id="i" first="1" last="16">
+			<group text="Channel ${i}">
+				<grid rows="4" cols="4">
+					<label text="Program"/>
+					<label text="Velocity"/>
+					<label text="Clamp"/>
+					<label text="Amplify"/>
+
+					<knob id="p${i}"/>
+					<knob id="v${i}"/>
+					<knob id="c${i}"/>
+					<knob id="a${i}"/>
+
+					<value id="p${i}"/>
+					<value id="v${i}"/>
+					<value id="c${i}"/>
+					<value id="a${i}"/>
+
+					<hbox fill="false">
+						<button id="pb${i}" color="red" led="true"/>
+						<label text="Bypass"/>
+					</hbox>
+					<hbox fill="false">
+						<button id="vb${i}" color="red" led="true"/>
+						<label text="Bypass"/>
+					</hbox>
+					<hbox fill="false">
+						<button id="cb${i}" color="red" led="true"/>
+						<label text="Enabled"/>
+					</hbox>
+					<hbox fill="false">
+						<button id="ab${i}" color="blue" led="true"/>
+						<label text="After Clamp"/>
+					</hbox>
+				</hbox>
+			</group>
+		</ui:for>
+	</vbox>
+</plugin>

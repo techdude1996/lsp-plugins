@@ -1,159 +1,59 @@
 #include <metadata/plugins.h>
 #include <metadata/ports.h>
 #include <metadata/developers.h>
+#include <string>
 
 using namespace lsp;
 
+// MIDI Channel override controls macro:
+#define MO_CONTROLS(ch)\
+	INT_CONTROL("p" + std::to_string(ch), "Program", U_NONE, midi_edit_metadata::PROGRAM),\
+	SWITCH("pb" + std::to_string(ch), "Bypass", 1),\
+	INT_CONTROL("v" + std::to_string(ch), "Velocity", U_NONE, midi_edit_metadata::VELOCITY),\
+	SWITCH("vb" + std::to_string(ch), "Bypass", 1),\
+	INT_CONTROL("c" + std::to_string(ch), "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),\
+	SWITCH("cb" + std::to_string(ch), "Enabled", 0),\
+	INT_CONTROL("a" + std::to_string(ch), "Amplify", U_NONE, midi_edit_metadata::AMP),\
+	SWITCH("ab" + std::to_string(ch), "Before Clamp", 0)
+
 static const port_t midi_edit_ports[] =
 {
-	/* Input */
     MIDI_INPUT,
 	MIDI_OUTPUT,
-
-	/* Program Override */
-    INT_CONTROL("ch01_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch01_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch01_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch01_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch01_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch01_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch01_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch01_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch02_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch02_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch02_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch02_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch02_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch02_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch02_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch02_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch03_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch03_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch03_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch03_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch03_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch03_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch03_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch03_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch04_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch04_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch04_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch04_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch04_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch04_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch04_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch04_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch05_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch05_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch05_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch05_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch05_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch05_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch05_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch05_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch06_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch06_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch06_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch06_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch06_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch06_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch06_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch06_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch07_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch07_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch07_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch07_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch07_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch07_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch07_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch07_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch08_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch08_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch08_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch08_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch08_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch08_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch08_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch08_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch09_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch09_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch09_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch09_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch09_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch09_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch09_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch09_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch10_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch10_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch10_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch10_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch10_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch10_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch10_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch10_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch11_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch11_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch11_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch11_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch11_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch11_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch11_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch11_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch12_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch12_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch12_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch12_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch12_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch12_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch12_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch12_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch13_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch13_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch13_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch13_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch13_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch13_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch13_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch13_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch14_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch14_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch14_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch14_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch14_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch14_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch14_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch14_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch15_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-	SWITCH("ch15_prog_bypass", "Pass Through", 1),
-	INT_CONTROL("ch15_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-	SWITCH("ch15_vel_bypass", "Pass Through", 1),
-	INT_CONTROL("ch15_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-	SWITCH("ch15_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch15_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch15_amp_before", "Before Clamp", 0),
-
-    INT_CONTROL("ch16_prog", "Program", U_NONE, midi_edit_metadata::PROGRAM),
-    SWITCH("ch16_prog_bypass", "Pass Through", 1),
-    INT_CONTROL("ch16_vel", "Velocity", U_NONE, midi_edit_metadata::VELOCITY),
-    SWITCH("ch16_vel_bypass", "Pass Through", 1),
-    INT_CONTROL("ch16_clamp", "Clamp Velocity", U_NONE, midi_edit_metadata::CLAMP),
-    SWITCH("ch16_clamp_bypass", "Enabled", 0),
-	INT_CONTROL("ch16_vel_amp", "Amplify", U_NONE, midi_edit_metadata::AMP),
-	SWITCH("ch16_amp_before", "Before Clamp", 0),
-
+	BYPASS,
+	MO_CONTROLS(1),
+	MO_CONTROLS(2),
+	MO_CONTROLS(3),
+	MO_CONTROLS(4),
+	MO_CONTROLS(5),
+	MO_CONTROLS(6),
+	MO_CONTROLS(7),
+	MO_CONTROLS(8),
+	MO_CONTROLS(9),
+	MO_CONTROLS(10),
+	MO_CONTROLS(11),
+	MO_CONTROLS(12),
+	MO_CONTROLS(13),
+	MO_CONTROLS(14),
+	MO_CONTROLS(15),
+	MO_CONTROLS(16),
 	PORTS_END
-}
+};
+
+#undef MO_CONTROLS
+
+const plugin_metadata_t midi_edit_metadata::metadata =
+{
+		"MIDI Override",
+		"Override parts of a MIDI stream",
+		"MO",
+		&developers::e_snyder,
+		"midi_override",
+		"", // FIXME
+		0, // FIXME
+		LSP_VERSION(1, 0, 0),
+		/* Classes Go Here*/, // FIXME
+		midi_edit_ports,
+		"midi/midi_override.xml",
+		NULL
+};
