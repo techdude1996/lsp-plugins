@@ -34,6 +34,9 @@
 #include <plugins/profiler.h>
 #include <plugins/nonlinear_convolver.h>
 
+#include <plugins/midi_override.h>
+
 #include <plugins/experimental.h>
+
 
 #endif /* PLUGINS_PLUGINS_H_ */

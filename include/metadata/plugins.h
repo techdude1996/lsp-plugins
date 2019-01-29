@@ -59,4 +59,6 @@
 #include <metadata/profiler.h>
 #include <metadata/nonlinear_convolver.h>
 
+#include <metadata/midi_override.h>
+
 #endif /* METADATA_PLUGINS_H_ */
