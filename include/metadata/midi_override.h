@@ -1,9 +1,11 @@
-#ifndef METADATA_MIDI_EDIT_H_
-#define METADATA_MIDI_EDIT_H_
+#ifndef METADATA_MIDI_OVERRIDE_H_
+#define METADATA_MIDI_OVERRIDE_H_
+
+#include <metadata/metadata.h>
 
 namespace lsp
 {
-	struct midi_edit_metadata
+	struct midi_override_metadata
 	{
 		/* 0-127 used internally */
 		static const float PROGRAM_MIN   = 1.0f;
@@ -29,4 +31,4 @@ namespace lsp
     	static const plugin_metadata_t metadata;
 	};
 }
-#endif /* METADATA_MIDI_EDIT_H_ */
+#endif /* METADATA_MIDI_OVERRIDE_H_ */
