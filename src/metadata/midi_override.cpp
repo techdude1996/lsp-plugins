@@ -9,14 +9,14 @@ using namespace lsp;
 
 // MIDI Channel override controls macro:
 #define MO_CONTROLS(ch)\
-	INT_CONTROL("p" + ch, "Program", U_NONE, midi_override_metadata::PROGRAM),\
-	SWITCH("pb" + ch, "Bypass", 1),\
-	INT_CONTROL("v" + ch, "Velocity", U_NONE, midi_override_metadata::VELOCITY),\
-	SWITCH("vb" + ch, "Bypass", 1),\
-	INT_CONTROL("c" + ch, "Clamp Velocity", U_NONE, midi_override_metadata::CLAMP),\
-	SWITCH("cb" + ch, "Enabled", 0),\
-	INT_CONTROL("a" + ch, "Amplify", U_NONE, midi_override_metadata::AMP),\
-	SWITCH("ab" + ch, "Before Clamp", 0)
+	INT_CONTROL("p" # ch, "Program", U_NONE, midi_override_metadata::PROGRAM),\
+	SWITCH("pb" # ch, "Bypass", 1),\
+	INT_CONTROL("v" # ch, "Velocity", U_NONE, midi_override_metadata::VELOCITY),\
+	SWITCH("vb" # ch, "Bypass", 1),\
+	INT_CONTROL("c" # ch, "Clamp Velocity", U_NONE, midi_override_metadata::CLAMP),\
+	SWITCH("cb" # ch, "Enabled", 0),\
+	INT_CONTROL("a" # ch, "Amplify", U_NONE, midi_override_metadata::AMP),\
+	SWITCH("ab" # ch, "Before Clamp", 0)
 
 static const port_t midi_edit_ports[] =
 {

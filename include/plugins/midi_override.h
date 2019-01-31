@@ -5,10 +5,11 @@
 #include <core/midi.h>
 #include <core/util/Bypass.h>
 #include <metadata/plugins.h>
+#include <metadata/midi_override.h>
 
 using namespace lsp;
 
-class midi_override_base: public plugin_t
+class midi_override_base: public plugin_t, public midi_override_metadata
 {
 	protected:
 		Bypass vBypass;
@@ -18,15 +19,15 @@ class midi_override_base: public plugin_t
         void     init(IWrapper *wrapper);
 		//void     update_sample_rate(long sr);
         void     destroy();
-		void     activated();
-		void     ui_activated();
+		//void     activated();
+		//void     ui_activated();
 		void     update_settings();
-		bool     set_position(const position_t *pos);
+		//bool     set_position(const position_t *pos);
         void     process(size_t samples);
-		bool     inline_display(ICanvas *cv, size_t width, size_t height);
-		void     ui_deactivated();
-		void     deactivated();
-		void     configure();
+		//bool     inline_display(ICanvas *cv, size_t width, size_t height);
+		//void     ui_deactivated();
+		//void     deactivated();
+		//void     configure();
 	protected:
 		// Ports
 		IPort    *pMidiIn;          // MIDI in
@@ -54,11 +55,6 @@ class midi_override_base: public plugin_t
 		bool     bAmpBC[16];
 
 		// Input MIDI values:
-
-};
-
-class midi_override_imp: public midi_override_base//, public midi_override_metadata
-{
 
 };
 
