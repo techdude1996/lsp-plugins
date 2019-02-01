@@ -112,6 +112,8 @@ void midi_override_base::process(size_t samples)
 
 	if(in == NULL)
 		return;
+
+	// Does not compile!
 /*
 	for(size_t i=0; i < in->nEvents; i++)
 	{

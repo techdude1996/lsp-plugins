@@ -34,7 +34,7 @@
 						<button id="ab${i}" color="blue" led="true"/>
 						<label text="After Clamp"/>
 					</hbox>
-				</hbox>
+				</grid>
 			</group>
 		</ui:for>
 	</vbox>

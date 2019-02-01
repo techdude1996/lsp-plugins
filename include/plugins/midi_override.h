@@ -54,8 +54,6 @@ class midi_override_base: public plugin_t, public midi_override_metadata
 		bool     bVelocityClampB[16];
 		bool     bAmpBC[16];
 
-		// Input MIDI values:
-
 };
 
 #endif /* CORE_PLUGINS_MIDI_EDIT_H_ */
