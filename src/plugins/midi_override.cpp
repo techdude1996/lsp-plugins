@@ -15,7 +15,26 @@
 #define TRACE_PORT(p) lsp_trace("  port id=%s", (p)->metadata()->id);
 
 using namespace lsp;
+/*
+midi_override_base::midi_override_base()
+{
+	pMidiIn  = NULL;
+	pMidiOut = NULL;
+	pBypass  = NULL;
 
+	for(int i = 0; i < 16; i++)
+		{
+			pProgram[i]             = NULL;
+			pProgramBypass[i]       = NULL;
+			pVelocity[i]            = NULL;
+			pVelocityBypass[i]      = NULL;
+			pVelocityClamp[i]       = NULL;
+	 		pVelocityClampBypass[i] = NULL;
+			pAmp[i]                 = NULL;
+			pAmpBC[i]               = NULL;
+		}
+}
+*/
 midi_override_base::~midi_override_base()
 {
 	 destroy();
@@ -114,24 +133,25 @@ void midi_override_base::process(size_t samples)
 		return;
 
 	// Does not compile!
-/*
+
 	for(size_t i=0; i < in->nEvents; i++)
 	{
 		const midi_event_t *me = &in->vEvents[i];
 		const uint8_t current_channel = me->channel;
+		midi_event_t ev = *me;
 
-		if(me->type == MIDI_MSG_NOTE_ON)
+		if(ev.type == MIDI_MSG_NOTE_ON)
 		{
 			if(!bProgramB[current_channel])
 			{
 				// Edit Program Number
-				me->program = nProgram[current_channel];
+				ev.program = nProgram[current_channel];
 			}
 
 			if(!bVelocityB[current_channel])
 			{
 				// Edit Velocity
-				me->note.velocity = nVelocity[current_channel];
+				ev.note.velocity = nVelocity[current_channel];
 			}
 
 			if(bVelocityClampB[current_channel])
@@ -139,35 +159,34 @@ void midi_override_base::process(size_t samples)
 				// Clamp Velocity (Check for Amp before!)
 				if(bAmpBC[current_channel])
 				{
-					me->note.velocity += nAmp[current_channel];
+					ev.note.velocity += nAmp[current_channel];
 				}
-				if(me->note.velocity > nVelocityClamp[current_channel])
+				if(ev.note.velocity > nVelocityClamp[current_channel])
 				{
-					me->note.velocity = nVelocityClamp[current_channel];
+					ev.note.velocity = nVelocityClamp[current_channel];
 				}
 			}
 
-			if(!bAmpBC[me->channel])
+			if(!bAmpBC[ev.channel])
 			{
 				// Amp post clamp
-				if(((me->note.velocity + nAmp[i]) <= 255) && ((me->note.velocity + nAmp[i]) >= 0))
+				if(((ev.note.velocity + nAmp[i]) <= 255) && ((ev.note.velocity + nAmp[i]) >= 0))
 				{
-					me->note.velocity += nAmp[i];
+					ev.note.velocity += nAmp[i];
 				}
-				else if((me->note.velocity + nAmp[i]) > 255)
+				else if((ev.note.velocity + nAmp[i]) > 255)
 				{
-					me->note.velocity = 255;
+					ev.note.velocity = 255;
 				}
-				else if((me->note.velocity + nAmp[i]) < 0)
+				else if((ev.note.velocity + nAmp[i]) < 0)
 				{
-					me->note.velocity = 0;
+					ev.note.velocity = 0;
 				}
 			}
 		}
+		// Push all changes to MIDI Out:
+		out->push(ev);
 	}
-
-	// Push all changes to MIDI Out:
-	out->push_all(in);*/
 }
 
 void midi_override_base::destroy()
