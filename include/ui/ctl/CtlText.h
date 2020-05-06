@@ -14,6 +14,9 @@ namespace lsp
     {
         class CtlText: public CtlWidget
         {
+            public:
+                static const ctl_class_t metadata;
+
             protected:
                 CtlExpression   sCoord;
                 CtlExpression   sBasis;
@@ -23,13 +26,15 @@ namespace lsp
                 void        update_coords();
 
             public:
-                CtlText(CtlRegistry *src, LSPText *text);
+                explicit CtlText(CtlRegistry *src, LSPText *text);
                 virtual ~CtlText();
 
             public:
                 virtual void init();
 
                 virtual void end();
+
+                virtual void set(const char *name, const char *value);
 
                 virtual void set(widget_attribute_t att, const char *value);
 

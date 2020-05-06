@@ -13,15 +13,16 @@ namespace lsp
     class LADSPAWrapper: public IWrapper
     {
         private:
-            cvector<LADSPAPort>     vPorts;
-            plugin_t               *pPlugin;
-            IExecutor              *pExecutor;      // Executor service
-            size_t                  nLatencyID;     // ID of Latency port
-            LADSPA_Data            *pLatency;       // Latency pointer
-            bool                    bUpdateSettings;// Settings update
+            cvector<LADSPAAudioPort>    vAudioPorts;
+            cvector<LADSPAPort>         vPorts;
+            plugin_t                   *pPlugin;
+            ipc::IExecutor             *pExecutor;      // Executor service
+            size_t                      nLatencyID;     // ID of Latency port
+            LADSPA_Data                *pLatency;       // Latency pointer
+            bool                        bUpdateSettings;// Settings update
 
-            position_t              sPosition;
-            position_t              sNewPosition;
+            position_t                  sPosition;
+            position_t                  sNewPosition;
 
         protected:
             inline void add_port(LADSPAPort *p)
@@ -32,7 +33,7 @@ namespace lsp
             }
 
         public:
-            LADSPAWrapper(plugin_t *plugin)
+            explicit LADSPAWrapper(plugin_t *plugin)
             {
                 pPlugin         = plugin;
                 pExecutor       = NULL;
@@ -66,12 +67,14 @@ namespace lsp
                     {
                         case R_AUDIO:
                         {
-                            LADSPAPort *lp  = new LADSPAAudioPort(port);
+                            LADSPAAudioPort *lp  = new LADSPAAudioPort(port);
                             add_port(lp);
+                            vAudioPorts.add(lp);
                             lsp_trace("added as audio port");
                             break;
                         }
                         case R_CONTROL:
+                        case R_BYPASS:
                         case R_METER:
                         {
                             LADSPAPort *lp = NULL;
@@ -89,6 +92,7 @@ namespace lsp
                         case R_UI_SYNC:
                         case R_MIDI:
                         case R_PATH:
+                        case R_OSC:
                         default:
                             pPlugin->add_port(new LADSPAPort(port));
                             lsp_trace("added as stub port");
@@ -172,11 +176,12 @@ namespace lsp
 //                lsp_trace("frame = %ld, tick = %f", long(sPosition.frame), float(sPosition.tick));
 
                 // Process external ports for changes
-                size_t n_ports  = vPorts.size();
+                size_t n_ports          = vPorts.size();
+                LADSPAPort **v_ports    = vPorts.get_array();
                 for (size_t i=0; i<n_ports; ++i)
                 {
                     // Get port
-                    LADSPAPort *port = vPorts.at(i);
+                    LADSPAPort *port = v_ports[i];
                     if (port == NULL)
                         continue;
 
@@ -196,13 +201,25 @@ namespace lsp
                     bUpdateSettings     = false;
                 }
 
-                // Call the main processing unit
-                pPlugin->process(samples);
+                // Call the main processing unit (split data buffers into chunks of maximum LADSPA_MAX_BLOCK_LENGTH size)
+                size_t n_in_ports = vAudioPorts.size();
+                for (size_t off=0; off < samples; )
+                {
+                    size_t to_process = samples - off;
+                    if (to_process > LADSPA_MAX_BLOCK_LENGTH)
+                        to_process = LADSPA_MAX_BLOCK_LENGTH;
+
+                    for (size_t i=0; i<n_in_ports; ++i)
+                        vAudioPorts.at(i)->sanitize(off, to_process);
+                    pPlugin->process(to_process);
+
+                    off += to_process;
+                }
 
                 // Process external ports for changes
                 for (size_t i=0; i<n_ports; ++i)
                 {
-                    LADSPAPort *port = vPorts.at(i);
+                    LADSPAPort *port = v_ports[i];
                     if (port != NULL)
                         port->post_process(samples);
                 }
@@ -217,12 +234,12 @@ namespace lsp
                 sNewPosition.tick   = ((sNewPosition.frame % spb) * sNewPosition.ticksPerBeat) / spb;
             }
 
-            virtual IExecutor *get_executor()
+            virtual ipc::IExecutor *get_executor()
             {
                 if (pExecutor == NULL)
                 {
                     lsp_trace("Creating native executor service");
-                    pExecutor       = new NativeExecutor();
+                    pExecutor       = new ipc::NativeExecutor();
                 }
                 return pExecutor;
             }

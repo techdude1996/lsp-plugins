@@ -16,54 +16,54 @@ namespace lsp
     // Dynamic Processor
     static const int dyna_processor_classes[] =
     {
-        C_DYNAMICS, C_COMPRESSOR, C_ENVELOPE, C_EXPANDER, C_GATE, C_LIMITER, -1
+        C_DYNAMICS, -1
     };
 
-    static const char *dyna_proc_sc_modes[] =
+    static const port_item_t dyna_proc_sc_modes[] =
     {
-        "Peak",
-        "RMS",
-        "Low-Pass",
-        "Uniform",
-        NULL
+        { "Peak",       "sidechain.peak"           },
+        { "RMS",        "sidechain.rms"            },
+        { "Low-Pass",   "sidechain.lowpass"        },
+        { "Uniform",    "sidechain.uniform"        },
+        { NULL, NULL }
     };
 
-    static const char *dyna_proc_sc_sources[] =
+    static const port_item_t dyna_proc_sc_sources[] =
     {
-        "Middle",
-        "Side",
-        "Left",
-        "Right",
-        NULL
+        { "Middle",     "sidechain.middle" },
+        { "Side",       "sidechain.side" },
+        { "Left",       "sidechain.left" },
+        { "Right",      "sidechain.right" },
+        { NULL, NULL }
     };
 
-    static const char *dyna_proc_sc_type[] =
+    static const port_item_t dyna_proc_sc_type[] =
     {
-        "Feed-forward",
-        "Feed-back",
-        NULL
+        { "Feed-forward",   "sidechain.feed_forward" },
+        { "Feed-back",      "sidechain.feed_back" },
+        { NULL, NULL }
     };
 
-    static const char *dyna_proc_extsc_type[] =
+    static const port_item_t dyna_proc_extsc_type[] =
     {
-        "Feed-forward",
-        "Feed-back",
-        "External",
-        NULL
+        { "Feed-forward",   "sidechain.feed_forward" },
+        { "Feed-back",      "sidechain.feed_back" },
+        { "External",       "sidechain.external" },
+        { NULL, NULL }
     };
 
-    static const char *dyna_proc_sel_lr[] =
+    static const port_item_t dyna_proc_sel_lr[] =
     {
-        "Left",
-        "Right",
-        NULL
+        { "Left",           "dyna_proc.left" },
+        { "Right",          "dyna_proc.right" },
+        { NULL, NULL }
     };
 
-    static const char *dyna_proc_sel_ms[] =
+    static const port_item_t dyna_proc_sel_ms[] =
     {
-        "Middle",
-        "Side",
-        NULL
+        { "Middle",         "dyna_proc.middle" },
+        { "Side",           "dyna_proc.side" },
+        { NULL, NULL }
     };
 
     #define DYNA_PROC_COMMON     \
@@ -263,8 +263,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 0,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         dyna_processor_mono_ports,
         "dynamics/processor/single/mono.xml",
+        NULL,
         mono_plugin_port_groups
     };
 
@@ -279,8 +281,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 1,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         dyna_processor_stereo_ports,
         "dynamics/processor/single/stereo.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -295,8 +299,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 2,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         dyna_processor_lr_ports,
         "dynamics/processor/single/lr.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -311,8 +317,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 3,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         dyna_processor_ms_ports,
         "dynamics/processor/single/ms.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -328,8 +336,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 4,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         sc_dyna_processor_mono_ports,
         "dynamics/processor/single/mono.xml",
+        NULL,
         mono_plugin_sidechain_port_groups
     };
 
@@ -344,8 +354,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 5,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         sc_dyna_processor_stereo_ports,
         "dynamics/processor/single/stereo.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 
@@ -360,8 +372,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 6,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         sc_dyna_processor_lr_ports,
         "dynamics/processor/single/lr.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 
@@ -376,8 +390,10 @@ namespace lsp
         LSP_DYNAMIC_PROCESSOR_BASE + 7,
         LSP_VERSION(1, 0, 1),
         dyna_processor_classes,
+        E_INLINE_DISPLAY,
         sc_dyna_processor_ms_ports,
         "dynamics/processor/single/ms.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 }

@@ -22,66 +22,15 @@ namespace lsp
 
         static const file_format_t file_formats[] =
         {
-            { "wav", "*.wav", "Wave audio format (*.wav)", ".wav", LSPFileMask::NONE },
-            { "lspc", "*.lspc", "LSP chunk data file format (*.lspc)", ".lspc", LSPFileMask::NONE },
-            { "cfg", "*.cfg", "LSP plugin configuration file (*.cfg)", ".cfg", LSPFileMask::NONE },
-            { "audio", "*.wav", "All supported audio files (*.wav)", ".wav", LSPFileMask::NONE },
-            { "audio_lspc", "*.wav|*.lspc", "All supported audio containers (*.wav, *.lspc)", ".wav", LSPFileMask::NONE },
-            { "all", "*", "All files (*.*)", "", LSPFileMask::NONE },
+            { "wav", "*.wav", "files.audio.wave", ".wav", LSPFileMask::NONE },
+            { "lspc", "*.lspc", "files.config.lspc", ".lspc", LSPFileMask::NONE },
+            { "cfg", "*.cfg", "files.config.lsp", ".cfg", LSPFileMask::NONE },
+            { "audio", "*.wav", "files.audio.supported", ".wav", LSPFileMask::NONE },
+            { "audio_lspc", "*.wav|*.lspc", "files.audio.audio_lspc", ".wav", LSPFileMask::NONE },
+            { "obj3d", "*.obj", "files.3d.wavefont", ".obj", LSPFileMask::NONE },
+            { "all", "*", "files.all", "", LSPFileMask::NONE },
             { NULL, NULL, NULL, 0 }
         };
-
-        bool parse_float(const char *variable, float *res)
-        {
-            UPDATE_LOCALE(saved_locale, LC_NUMERIC, "C");
-            errno = 0;
-            char *end   = NULL;
-            float value = strtof(variable, &end);
-
-            bool success = (errno == 0);
-            if ((end != NULL) && (success))
-            {
-                // Skip spaces
-                while ((*end) == ' ')
-                    ++ end;
-                if (((end[0] == 'd') || (end[0] == 'D')) &&
-                    ((end[1] == 'b') || (end[1] == 'B')))
-                    value   = expf(value * M_LN10 * 0.05);
-            }
-
-            if (saved_locale != NULL)
-                setlocale(LC_NUMERIC, saved_locale);
-
-            if (res != NULL)
-                *res        = value;
-            return success;
-        }
-
-        bool parse_double(const char *variable, double *res)
-        {
-            UPDATE_LOCALE(saved_locale, LC_NUMERIC, "C");
-            errno = 0;
-            char *end       = NULL;
-            double value    = strtod(variable, &end);
-
-            bool success    = (errno == 0);
-            if ((end != NULL) && (success))
-            {
-                // Skip spaces
-                while ((*end) == ' ')
-                    ++ end;
-                if (((end[0] == 'd') || (end[0] == 'D')) &&
-                    ((end[1] == 'b') || (end[1] == 'B')))
-                    value   = expf(value * M_LN10 * 0.05);
-            }
-
-            if (saved_locale != NULL)
-                setlocale(LC_NUMERIC, saved_locale);
-
-            if (res != NULL)
-                *res        = value;
-            return success;
-        }
 
         void add_format(LSPFileFilter *flt, const char *variable, size_t n)
         {
@@ -89,7 +38,12 @@ namespace lsp
             {
                 if (!strncasecmp(f->id, variable, n))
                 {
-                    flt->add(f->filter, f->text, f->ext, f->flags);
+                    LSPFileFilterItem ffi;
+                    ffi.pattern()->set(f->filter, f->flags);
+                    ffi.title()->set(f->text);
+                    ffi.set_extension(f->ext);
+
+                    flt->add(&ffi);
                     return;
                 }
             }
@@ -124,7 +78,7 @@ namespace lsp
             return true;
         }
 
-        bool set_port_value(CtlPort *up, const char *value)
+        bool set_port_value(CtlPort *up, const char *value, size_t flags)
         {
             if (up == NULL)
                 return false;
@@ -148,33 +102,23 @@ namespace lsp
                     {
                         if (p->unit == U_BOOL)
                         {
-                            PARSE_BOOL(value,
-                                up->set_value(__);
-                                up->notify_all();
-                            );
+                            PARSE_BOOL(value, up->set_value(__, flags); );
                         }
                         else
                         {
-                            PARSE_INT(value,
-                                up->set_value(__);
-                                up->notify_all();
-                            );
+                            PARSE_INT(value, up->set_value(__, flags); );
                         }
                     }
                     else
                     {
-                        PARSE_FLOAT(value,
-                            up->set_value(__);
-                            up->notify_all();
-                        );
+                        PARSE_FLOAT(value, up->set_value(__, flags); );
                     }
                     break;
                 }
                 case R_PATH:
                 {
-                    size_t len      = strlen(value);
-                    up->write(value, len);
-                    up->notify_all();
+                    size_t len      = ::strlen(value);
+                    up->write(value, len, flags);
                     break;
                 }
                 default:
@@ -221,16 +165,22 @@ namespace lsp
                             else
                                 LSP_BOOL_ASSERT(comment->append_utf8(": true/false"), STATUS_NO_MEM);
                         }
+                        else if (!(p->flags & F_EXT))
+                        {
+                            LSP_BOOL_ASSERT(comment->fmt_append_utf8(": %.8f..%.8f", p->min, p->max), STATUS_NO_MEM);
+                        }
                         else
-                            LSP_BOOL_ASSERT(comment->fmt_append_utf8(": %.6f..%.6f", p->min, p->max), STATUS_NO_MEM);
+                        {
+                            LSP_BOOL_ASSERT(comment->fmt_append_utf8(": %.12f..%.12f", p->min, p->max), STATUS_NO_MEM);
+                        }
                     }
 
                     // Describe enum
                     if ((p->unit == U_ENUM) && (p->items != NULL))
                     {
                         int value   = p->min;
-                        for (const char **item = p->items; *item != NULL; ++item)
-                            LSP_BOOL_ASSERT(comment->fmt_append_utf8("\n  %d: %s", value++, *item), STATUS_NO_MEM);
+                        for (const port_item_t *item = p->items; item->text != NULL; ++item)
+                            LSP_BOOL_ASSERT(comment->fmt_append_utf8("\n  %d: %s", value++, item->text), STATUS_NO_MEM);
                     }
 
                     // Serialize name
@@ -245,12 +195,18 @@ namespace lsp
                         else
                             LSP_BOOL_ASSERT(value->fmt_utf8("%d", int(v)), STATUS_NO_MEM);
                     }
+                    else if (!(p->flags & F_EXT))
+                    {
+                        LSP_BOOL_ASSERT(value->fmt_utf8("%.8f", v), STATUS_NO_MEM);
+                    }
                     else
-                        LSP_BOOL_ASSERT(value->fmt_utf8("%.6f", v), STATUS_NO_MEM);
+                    {
+                        LSP_BOOL_ASSERT(value->fmt_utf8("%.12f", v), STATUS_NO_MEM);
+                    }
 
                     // No flags
                     *flags = 0;
-                    return STATUS_OK;
+                    break;
                 }
                 case R_PATH:
                 {
@@ -265,10 +221,10 @@ namespace lsp
 
                     // No flags
                     *flags = config::SF_QUOTED;
-                    return STATUS_OK;
+                    break;
                 }
                 default:
-                    break;
+                    return STATUS_BAD_TYPE;
             }
             return STATUS_OK;
         }

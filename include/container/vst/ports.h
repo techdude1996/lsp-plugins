@@ -74,7 +74,7 @@ namespace lsp
             }
 
         public:
-            VSTPort(const port_t *meta, AEffect *effect, audioMasterCallback callback): IPort(meta)
+            explicit VSTPort(const port_t *meta, AEffect *effect, audioMasterCallback callback): IPort(meta)
             {
                 pEffect         = effect;
                 hCallback       = callback;
@@ -100,35 +100,35 @@ namespace lsp
 
             virtual void writeValue(float value)    {};
 
-            /** Get the maximum size of serialized data for this port
-             *
-             * @return maximum size of serialized data for this port
-             */
-            virtual size_t serial_size()
-            {
-                return 0;
-            }
+            virtual bool serializable() const { return false; }
 
             /** Serialize the state of the port to the chunk
              *
-             * @param data data buffer
-             * @param length length of the buffer in bytes
-             * @return number of bytes serialized or error
+             * @param chunk chunk to perform serialization
              */
-            virtual ssize_t serialize(void *data, size_t length)
-            {
-                return -1;
-            }
+            virtual void serialize(vst_chunk_t *chunk) {}
 
-            /** Deserialize the state of the port to the chunk
+            /** Deserialize the state of the port from the chunk (legacy version)
              *
              * @param data data buffer
              * @param length length of the buffer in bytes
              * @return number of bytes deserialized or error
              */
-            virtual ssize_t deserialize(const void *data, size_t length)
+            virtual ssize_t deserialize_v1(const void *data, size_t length)
             {
                 return -1;
+            }
+
+            /**
+             * Deserialize the state of the port from the chunk data, data pointer should
+             * be updated
+             * @param data chunk data
+             * @param limit the data size
+             * @return true on success
+             */
+            virtual bool deserialize_v2(const uint8_t *data, size_t size)
+            {
+                return true;
             }
     };
 
@@ -140,7 +140,7 @@ namespace lsp
             size_t                  nRows;
 
         public:
-            VSTPortGroup(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTPortGroup(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 nCurrRow            = meta->start;
                 nCols               = port_list_size(meta->members);
@@ -167,20 +167,15 @@ namespace lsp
                 return nCurrRow;
             }
 
-            virtual size_t serial_size()
+            virtual bool serializable() const { return true; }
+
+            virtual void serialize(vst_chunk_t *chunk)
             {
-                return sizeof(int32_t);
+                int32_t v = CPU_TO_BE(int32_t(nCurrRow));
+                chunk->write(&v, sizeof(v));
             }
 
-            virtual ssize_t serialize(void *data, size_t length)
-            {
-                if (length < sizeof(int32_t))
-                    return -1;
-                *(reinterpret_cast<int32_t *>(data))    = CPU_TO_BE(nCurrRow);
-                return sizeof(int32_t);
-            }
-
-            virtual ssize_t deserialize(const void *data, size_t length)
+            virtual ssize_t deserialize_v1(const void *data, size_t length)
             {
                 if (length < sizeof(int32_t))
                     return -1;
@@ -188,6 +183,18 @@ namespace lsp
                 if ((value >= 0) && (value < ssize_t(nRows)))
                     nCurrRow        = value;
                 return sizeof(int32_t);
+            }
+
+            virtual bool deserialize_v2(const uint8_t *data, size_t size)
+            {
+                if (size < sizeof(int32_t))
+                    return false;
+
+                int32_t v       = BE_TO_CPU(*(reinterpret_cast<const int32_t *>(data)));
+                if ((v >= 0) && (v < ssize_t(nRows)))
+                    nCurrRow        = v;
+
+                return true;
             }
 
         public:
@@ -199,26 +206,71 @@ namespace lsp
     class VSTAudioPort: public VSTPort
     {
         private:
-            float *pBuffer;
+            float          *pBuffer;
+            float          *pSanitized;
+            size_t          nBufSize;
 
         public:
-            VSTAudioPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTAudioPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 pBuffer     = NULL;
+                pSanitized  = NULL;
+                nBufSize    = 0;
             }
 
             virtual ~VSTAudioPort()
             {
                 pBuffer     = NULL;
+
+                if (pSanitized != NULL)
+                {
+                    ::free(pSanitized);
+                    pSanitized  = NULL;
+                    nBufSize    = 0;
+                }
             };
 
         public:
             virtual void *getBuffer() { return pBuffer; };
 
-            void bind(float *data)
+            void bind(float *data, size_t samples)
             {
-                pBuffer = data;
+                pBuffer     = data;
+                if (pSanitized == NULL)
+                    return;
+
+                // Perform sanitize() if possible
+                if (samples <= nBufSize)
+                {
+                    dsp::sanitize2(pSanitized, reinterpret_cast<float *>(pBuffer), samples);
+                    pBuffer = pSanitized;
+                }
+                else
+                {
+                    lsp_warn("Could not sanitize buffer data for port %s, not enough buffer size (required: %d, actual: %d)",
+                            pMetadata->id, int(samples), int(nBufSize));
+                }
             };
+
+            void set_blk_size(size_t size)
+            {
+                if (!IS_IN_PORT(pMetadata))
+                    return;
+                if (nBufSize == size)
+                    return;
+
+                float *buf  = reinterpret_cast<float *>(::realloc(pSanitized, sizeof(float) * size));
+                if (buf == NULL)
+                {
+                    ::free(pSanitized);
+                    pSanitized = NULL;
+                    return;
+                }
+
+                nBufSize    = size;
+                pSanitized  = buf;
+                dsp::fill_zero(pSanitized, nBufSize);
+            }
     };
 
     class VSTParameterPort: public VSTPort
@@ -230,7 +282,7 @@ namespace lsp
             volatile vst_serial_t nSID; // Serial ID of the parameter
 
         public:
-            VSTParameterPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTParameterPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 fValue      = meta->start;
                 fVstPrev    = to_vst(meta->start);
@@ -298,27 +350,31 @@ namespace lsp
                 return nSID;
             }
 
-            virtual size_t serial_size()
+            virtual bool serializable() const { return true; }
+
+            virtual void serialize(vst_chunk_t *chunk)
             {
-                return sizeof(float);
+                float v = CPU_TO_BE(fValue);
+                chunk->write(&v, sizeof(v));
             }
 
-            virtual ssize_t serialize(void *data, size_t length)
-            {
-                if (length < sizeof(float))
-                    return -1;
-                *(reinterpret_cast<float *>(data))      = CPU_TO_BE(fValue);
-
-                return sizeof(float);
-            }
-
-            virtual ssize_t deserialize(const void *data, size_t length)
+            virtual ssize_t deserialize_v1(const void *data, size_t length)
             {
                 if (length < sizeof(float))
                     return -1;
                 float value     = BE_TO_CPU(*(reinterpret_cast<const float *>(data)));
                 writeValue(value);
                 return sizeof(float);
+            }
+
+            virtual bool deserialize_v2(const uint8_t *data, size_t size)
+            {
+                if (size < sizeof(float))
+                    return false;
+
+                float v         = BE_TO_CPU(*(reinterpret_cast<const float *>(data)));
+                writeValue(v);
+                return true;
             }
     };
 
@@ -329,7 +385,7 @@ namespace lsp
             bool    bForce;
 
         public:
-            VSTMeterPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTMeterPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 fValue      = meta->start;
                 bForce      = true;
@@ -377,7 +433,7 @@ namespace lsp
             mesh_t     *pMesh;
 
         public:
-            VSTMeshPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTMeshPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 pMesh   = vst_create_mesh(meta);
             }
@@ -401,7 +457,7 @@ namespace lsp
             frame_buffer_t     sFB;
 
         public:
-            VSTFrameBufferPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTFrameBufferPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 sFB.init(pMetadata->start, pMetadata->step);
             }
@@ -429,7 +485,7 @@ namespace lsp
             midi_t      sQueue;         // MIDI event buffer
 
         public:
-            VSTMidiInputPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTMidiInputPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 sQueue.clear();
             }
@@ -465,8 +521,8 @@ namespace lsp
                     const uint8_t *bytes        = reinterpret_cast<const uint8_t *>(vme->midiData);
 
                     // Decode MIDI event
-                    midi_event_t me;
-                    if (!decode_midi_message(&me, bytes))
+                    midi::event_t me;
+                    if (midi::decode(&me, bytes) <= 0)
                         return;
 
                     // Put the event to the queue
@@ -474,7 +530,7 @@ namespace lsp
 
                     // Debug
                     #ifdef LSP_TRACE
-                        #define TRACE_KEY(x)    case MIDI_MSG_ ## x: evt_type = #x; break;
+                        #define TRACE_KEY(x)    case midi::MIDI_MSG_ ## x: evt_type = #x; break;
                         lsp_trace("midi dump: %02x %02x %02x", int(bytes[0]) & 0xff, int(bytes[1]) & 0xff, int(bytes[2]) & 0xff);
 
                         char tmp_evt_type[32];
@@ -516,6 +572,9 @@ namespace lsp
                     if (!sQueue.push(me))
                         lsp_error("MIDI event queue overflow");
                 }
+
+                // We don't know anything about ordering of events, reorder them chronologically
+                sQueue.sort();
             }
     };
 
@@ -527,7 +586,7 @@ namespace lsp
             VstMidiEvent    vEvents[MIDI_EVENTS_MAX];   // Buffer for VST MIDI events
 
         public:
-            VSTMidiOutputPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTMidiOutputPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 sQueue.clear();
 
@@ -552,17 +611,20 @@ namespace lsp
                 if (sQueue.nEvents <= 0)
                     return;
 
+                // We don't know anything about ordering of events, reorder them chronologically
+                sQueue.sort();
+
                 // Translate events
                 pEvents->numEvents  = 0;
 
                 for (size_t i=0; i<sQueue.nEvents; ++i)
                 {
-                    const midi_event_t *me  = &sQueue.vEvents[i];
-                    VstMidiEvent       *dst = &vEvents[pEvents->numEvents];
+                    const midi::event_t    *me  = &sQueue.vEvents[i];
+                    VstMidiEvent           *dst = &vEvents[pEvents->numEvents];
 
                     // Debug
                     #ifdef LSP_TRACE
-                        #define TRACE_KEY(x)    case MIDI_MSG_ ## x: evt_type = #x; break;
+                        #define TRACE_KEY(x)    case midi::MIDI_MSG_ ## x: evt_type = #x; break;
 
                         char tmp_evt_type[32];
                         const char *evt_type = NULL;
@@ -599,7 +661,7 @@ namespace lsp
 
                     #endif /* LSP_TRACE */
 
-                    size_t bytes = encode_midi_message(me, reinterpret_cast<uint8_t *>(dst->midiData));
+                    ssize_t bytes = midi::encode(reinterpret_cast<uint8_t *>(dst->midiData), me);
                     if (bytes <= 0)
                     {
                         lsp_error("Tried to serialize invalid MIDI event");
@@ -609,6 +671,11 @@ namespace lsp
                     dst->type           = kVstMidiType;
                     dst->byteSize       = sizeof(VstMidiEvent);
                     dst->deltaFrames    = me->timestamp;
+                    dst->flags          = (me->type >= midi::MIDI_MSG_CLOCK) ? kVstMidiEventIsRealtime : 0;
+                    dst->noteLength     = 0;
+                    dst->noteOffset     = 0;
+                    dst->detune         = 0;
+                    dst->noteOffVelocity= (me->type == midi::MIDI_MSG_NOTE_OFF) ? me->note.velocity : 0;
 
                     lsp_trace("midi dump: %02x %02x %02x",
                         int(dst->midiData[0]) & 0xff, int(dst->midiData[1]) & 0xff, int(dst->midiData[2]) & 0xff);
@@ -634,7 +701,7 @@ namespace lsp
             vst_path_t     sPath;
 
         public:
-            VSTPathPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            explicit VSTPathPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
             {
                 sPath.init();
             }
@@ -667,31 +734,12 @@ namespace lsp
                 return bytes;
             }
 
-            virtual ssize_t serialize(void *data, size_t length)
+            virtual void serialize(vst_chunk_t *chunk)
             {
-                size_t slen     = strlen(sPath.sPath);
-                if (slen >= 0x7fff)
-                    slen            = 0x7fff;
-                size_t bytes    = (slen > 0x7f) ? slen + 2 : slen + 1;
-                if (length < bytes)
-                    return -1;
-
-                // Write the size of string (1-2 bytes)
-                uint8_t *ptr    = reinterpret_cast<uint8_t *>(data);
-                if (slen > 0x7f)
-                {
-                    *ptr++      = (slen >> 8) | 0x80;
-                    *ptr++      = slen & 0xff;
-                }
-                else
-                    *ptr++      = slen;
-
-                // Write the string
-                memcpy(ptr, sPath.sPath, slen);
-                return bytes;
+                chunk->write_string(sPath.sPath);
             }
 
-            virtual ssize_t deserialize(const void *data, size_t length)
+            virtual ssize_t deserialize_v1(const void *data, size_t length)
             {
                 const uint8_t  *ptr     = reinterpret_cast<const uint8_t *>(data);
                 const uint8_t  *tail    = ptr + length;
@@ -714,18 +762,61 @@ namespace lsp
                     return -1;
 
                 // Submit data
-                sPath.submit(reinterpret_cast<const char *>(ptr), bytes, false);
+                sPath.submit(reinterpret_cast<const char *>(ptr), bytes, false, PF_STATE_RESTORE);
                 ptr            += bytes;
                 return ptr - reinterpret_cast<const uint8_t *>(data);
             }
 
-            virtual size_t serial_size()
+            virtual bool deserialize_v2(const uint8_t *data, size_t size)
             {
-                return PATH_MAX + 2; // 2 bytes for length, PATH_MAX as length
+                const char *str = reinterpret_cast<const char *>(data);
+                size_t len  = ::strnlen(str, size) + 1;
+                if (len > size)
+                    return false;
+
+                sPath.submit(str, len, false, PF_STATE_RESTORE);
+                return true;
             }
+
+            virtual bool serializable() const { return true; }
     };
 
+    class VSTOscPort: public VSTPort
+    {
+        private:
+            osc_buffer_t     *pFB;
 
+        public:
+            explicit VSTOscPort(const port_t *meta, AEffect *effect, audioMasterCallback callback) : VSTPort(meta, effect, callback)
+            {
+                pFB     = NULL;
+            }
+
+            virtual ~VSTOscPort()
+            {
+            }
+
+        public:
+            virtual void *getBuffer()
+            {
+                return pFB;
+            }
+
+            virtual int init()
+            {
+                pFB = osc_buffer_t::create(OSC_BUFFER_MAX);
+                return (pFB == NULL) ? STATUS_NO_MEM : STATUS_OK;
+            }
+
+            virtual void destroy()
+            {
+                if (pFB != NULL)
+                {
+                    osc_buffer_t::destroy(pFB);
+                    pFB     = NULL;
+                }
+            }
+    };
 }
 
 

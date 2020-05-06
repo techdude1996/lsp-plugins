@@ -12,6 +12,20 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <locale.h>
+#include <errno.h>
+#include <stdlib.h>
+
+#define UPDATE_LOCALE(out_var, lc, value) \
+       char *out_var = ::setlocale(lc, NULL); \
+       if (out_var != NULL) \
+       { \
+           size_t ___len = ::strlen(out_var) + 1; \
+           char *___copy = static_cast<char *>(::alloca(___len)); \
+           ::memcpy(___copy, out_var, ___len); \
+           out_var = ___copy; \
+       } \
+       ::setlocale(lc, value);
 
 namespace lsp
 {
@@ -29,65 +43,83 @@ namespace lsp
         LSP_LV2_LATENCY_PORT,   "Latency OUT",          U_NONE,         R_CONTROL, F_OUT | F_INT | F_LOWER | F_UPPER, 0, MAX_SAMPLE_RATE, 0, 0, NULL
     };
 
-    const char *unit_names[] =
+    typedef struct unit_desc_t
     {
-        NULL,
-        NULL,
-        NULL,
-        "%",
+        const char *name;
+        const char *lc_key;
+    } unit_desc_t;
 
-        "mm",
-        "cm",
-        "m",
-        "\"",
-        "km",
+    const unit_desc_t unit_desc[] =
+    {
+        { NULL,     NULL },
+        { NULL,     NULL },
+        { NULL,     NULL },
+        { "%",      "units.pc" },
 
-        "samp",
+        { "mm",     "units.mm" },
+        { "cm",     "units.cm" },
+        { "m",      "units.m" },
+        { "\"",     "units.inch" },
+        { "km",     "units.km" },
 
-        "Hz",
-        "kHz",
-        "MHz",
-        "bpm",
+        { "m/s",    "units.mps" },
+        { "km/h",   "units.kmph" },
 
-        "cent",
+        { "samp",   "units.samp" },
 
-        "bar",
-        "beat",
-        "s",
-        "ms",
+        { "Hz",     "units.hz" },
+        { "kHz",    "units.khz" },
+        { "MHz",    "units.mhz" },
+        { "bpm",    "units.bpm" },
 
-        "dB",
-        "G",
-        "G",
+        { "cent",   "units.cent" },
+        { "oct",    "units.octave" },
+        { "st",     "units.st" },
 
-        "°",
-        "°C",
-        "°F",
-        "°K",
-        "°R",
+        { "bar",    "units.bar" },
+        { "beat",   "units.beat" },
+        { "min",    "units.min" },
+        { "s",      "units.s" },
+        { "ms",     "units.ms" },
+
+        { "dB",     "units.db" },
+        { "G",      "units.gain" },
+        { "G",      "units.gain" },
+
+        { "°",      "units.deg" },
+        { "°C",     "units.degc" },
+        { "°F",     "units.degf" },
+        { "°K",     "units.degk" },
+        { "°R",     "units.degr" },
 
         NULL
     };
 
-    static const char *default_bool[] =
+    static port_item_t default_bool[] =
     {
-        "off", "on", NULL
+        { "off",    "bool.off" },
+        { "on",     "bool.on" },
+        { NULL, NULL }
     };
 
     const char *encode_unit(size_t unit)
     {
-        if ((unit >= 0) && (unit <= U_ENUM))
-            return unit_names[unit];
+        return ((unit >= 0) && (unit <= U_ENUM)) ?
+                unit_desc[unit].name : NULL;
+    }
 
-        return NULL;
+    const char *unit_lc_key(size_t unit)
+    {
+        return ((unit >= 0) && (unit <= U_ENUM)) ?
+                unit_desc[unit].lc_key : NULL;
     }
 
     unit_t decode_unit(const char *name)
     {
         for (ssize_t i=0; i<= U_ENUM; ++i)
         {
-            const char *uname = unit_names[i];
-            if ((uname != NULL) && (!strcmp(name, uname)))
+            const char *uname = unit_desc[i].name;
+            if ((uname != NULL) && (!::strcmp(name, uname)))
                 return unit_t(i);
         }
         return U_NONE;
@@ -121,6 +153,22 @@ namespace lsp
         return false;
     }
 
+    bool is_degree_unit(size_t unit)
+    {
+        switch (unit)
+        {
+            case U_DEG:
+            case U_DEG_CEL:
+            case U_DEG_FAR:
+            case U_DEG_K:
+            case U_DEG_R:
+                return true;
+            default:
+                break;
+        }
+        return false;
+    }
+
     bool is_log_rule(const port_t *port)
     {
         if (port->flags & F_LOG)
@@ -128,23 +176,36 @@ namespace lsp
         return is_decibel_unit(port->unit);
     }
 
-    size_t list_size(const char **list)
+    size_t list_size(const port_item_t *list)
     {
         size_t size = 0;
-        while ((list != NULL) && (*list != NULL))
-        {
-            size    ++;
-            list    ++;
-        }
+        for ( ; (list != NULL) && (list->text != NULL); ++list)
+            ++size;
         return size;
     }
 
     float limit_value(const port_t *port, float value)
     {
+        if ((port->flags & (F_CYCLIC | F_UPPER | F_LOWER)) == (F_CYCLIC | F_UPPER | F_LOWER))
+        {
+            if (port->max > port->min)
+            {
+                value = port->min + fmodf(value - port->min, port->max - port->min);
+                if (value < port->min)
+                    value  += port->max - port->min;
+            }
+            else if (port->min > port->max)
+            {
+                value = port->max + fmodf(value - port->max, port->min - port->max);
+                if (value < port->max)
+                    value  += port->min - port->max;
+            }
+        }
+
         if (port->flags & F_UPPER)
         {
             if (value > port->max)
-                return port->max;
+                value = port->max;
         }
         if (port->flags & F_LOWER)
         {
@@ -215,14 +276,13 @@ namespace lsp
     void format_enum(char *buf, size_t len, const port_t *meta, float value)
     {
         float min   = (meta->flags & F_LOWER) ? meta->min: 0;
-//        float max   = meta->min + list_size(meta->items) - 1.0f;
         float step  = (meta->flags & F_STEP) ? meta->step : 1.0;
 
-        for (const char **p = meta->items; (p != NULL) && (*p != NULL); ++p)
+        for (const port_item_t *p = meta->items; (p != NULL) && (p->text != NULL); ++p)
         {
             if (min >= value)
             {
-                strncpy(buf, *p, len);
+                ::strncpy(buf, p->text, len);
                 buf[len - 1] = '\0';
                 return;
             }
@@ -233,12 +293,13 @@ namespace lsp
 
     void format_decibels(char *buf, size_t len, const port_t *meta, float value, ssize_t precision)
     {
-        double mul       = (meta->unit == U_GAIN_AMP) ? 20.0 : 10.0;
+        double mul      = (meta->unit == U_GAIN_AMP) ? 20.0 : 10.0;
         if (value < 0.0f)
             value           = - value;
 
         value = mul * log(value) / M_LN10;
-        if (value <= -80.0)
+        float thresh    = (meta->flags & F_EXT) ? -140.0f : -80.0f;
+        if (value <= thresh)
         {
             strcpy(buf, "-inf");
             return;
@@ -262,13 +323,13 @@ namespace lsp
 
     void format_bool(char *buf, size_t len, const port_t *meta, float value)
     {
-        const char **list = (meta->items != NULL) ? meta->items : default_bool;
+        const port_item_t *list = (meta->items != NULL) ? meta->items : default_bool;
         if (value >= 0.5f)
-            list++;
+            ++list;
 
-        if (*list != NULL)
+        if (list->text != NULL)
         {
-            strncpy(buf, *list, len);
+            ::strncpy(buf, list->text, len);
             buf[len-1] = '\0';
         }
         else
@@ -281,15 +342,141 @@ namespace lsp
             format_bool(buf, len, meta, value);
         else if (meta->unit == U_ENUM)
             format_enum(buf, len, meta, value);
+        else if ((meta->unit == U_GAIN_AMP) || (meta->unit == U_GAIN_POW))
+            format_decibels(buf, len, meta, value, precision);
+        else if (meta->flags & F_INT)
+            format_int(buf, len, meta, value);
         else
+            format_float(buf, len, meta, value, precision);
+    }
+
+    status_t parse_bool(float *dst, const char *text)
+    {
+        if ((!::strcasecmp(text, "true")) ||
+            (!::strcasecmp(text, "on")) ||
+            (!::strcasecmp(text, "1")))
         {
-            if ((meta->unit == U_GAIN_AMP) || (meta->unit == U_GAIN_POW))
-                format_decibels(buf, len, meta, value, precision);
-            else if (meta->flags & F_INT)
-                format_int(buf, len, meta, value);
-            else
-                format_float(buf, len, meta, value, precision);
+            if (dst != NULL)
+                *dst    = 1.0f;
+            return STATUS_OK;
         }
+
+        if ((!::strcasecmp(text, "false")) ||
+            (!::strcasecmp(text, "off")) ||
+            (!::strcasecmp(text, "0")))
+        {
+            if (dst != NULL)
+                *dst    = 0.0f;
+            return STATUS_OK;
+        }
+
+        return STATUS_INVALID_VALUE;
+    }
+
+    status_t parse_enum(float *dst, const char *text, const port_t *meta)
+    {
+        float min   = (meta->flags & F_LOWER) ? meta->min: 0;
+        float step  = (meta->flags & F_STEP) ? meta->step : 1.0;
+
+        for (const port_item_t *p = meta->items; (p != NULL) && (p->text != NULL); ++p)
+        {
+            if (!::strcasecmp(text, p->text))
+            {
+                if (dst != NULL)
+                    *dst    = min;
+                return STATUS_OK;
+            }
+            min    += step;
+        }
+
+        return STATUS_INVALID_VALUE;
+    }
+
+    status_t parse_decibels(float *dst, const char *text, const port_t *meta)
+    {
+        if (!::strcasecmp(text, "-inf"))
+        {
+            if (dst != NULL)
+                *dst = 0.0f;
+            return STATUS_OK;
+        }
+
+        float mul   = (meta->unit == U_GAIN_AMP) ? 0.05f : 0.1f;
+
+        // Parse float value
+        UPDATE_LOCALE(saved_locale, LC_NUMERIC, "C");
+        errno       = 0;
+        char *end   = NULL;
+        float value = ::strtof(text, &end);
+        status_t res= STATUS_INVALID_VALUE;
+
+        if ((*end == '\0') && (errno == 0))
+        {
+            if (dst != NULL)
+                *dst    = ::expf(value * M_LN10 * mul);
+            res     = STATUS_OK;
+        }
+
+        if (saved_locale != NULL)
+            ::setlocale(LC_NUMERIC, saved_locale);
+
+        return res;
+    }
+
+    status_t parse_int(float *dst, const char *text, const port_t *meta)
+    {
+        errno       = 0;
+        char *end   = NULL;
+        long value  = ::strtol(text, &end, 10);
+        if ((*end == '\0') && (errno == 0))
+        {
+            if (dst != NULL)
+                *dst        = value;
+            return STATUS_OK;
+        }
+
+        return STATUS_INVALID_VALUE;
+    }
+
+    status_t parse_float(float *dst, const char *text, const port_t *meta)
+    {
+        // Parse float value
+        UPDATE_LOCALE(saved_locale, LC_NUMERIC, "C");
+        errno       = 0;
+        char *end   = NULL;
+        float value = ::strtof(text, &end);
+        status_t res= STATUS_INVALID_VALUE;
+
+        if ((*end == '\0') && (errno == 0))
+        {
+            if (dst != NULL)
+                *dst    = value;
+            res     = STATUS_OK;
+        }
+
+        if (saved_locale != NULL)
+            ::setlocale(LC_NUMERIC, saved_locale);
+
+        return res;
+    }
+
+    status_t parse_value(float *dst, const char *text, const port_t *meta)
+    {
+        if ((text == NULL) || (meta == NULL) || (*text == '\0'))
+            return STATUS_BAD_ARGUMENTS;
+
+        if (meta->unit == U_BOOL)
+            return parse_bool(dst, text);
+        else if (meta->unit == U_ENUM)
+            return parse_enum(dst, text, meta);
+        else if ((meta->unit == U_GAIN_AMP) || (meta->unit == U_GAIN_POW))
+            return parse_decibels(dst, text, meta);
+        else if (meta->flags & F_INT)
+            return parse_int(dst, text, meta);
+        else
+            return parse_float(dst, text, meta);
+
+        return STATUS_BAD_ARGUMENTS;
     }
 
     void get_port_parameters(const port_t *p, float *min, float *max, float *step)
@@ -350,14 +537,15 @@ namespace lsp
         }
 
         // Calculate the overall allocation size
+        size_t to_copy          = sizeof(port_t) * elements;
         string_bytes            = ALIGN_SIZE(string_bytes, DEFAULT_ALIGN);
-        elements                = ALIGN_SIZE(sizeof(port_t) * elements, DEFAULT_ALIGN);
+        elements                = ALIGN_SIZE(to_copy, DEFAULT_ALIGN);
         size_t allocate         = string_bytes + elements;
         uint8_t *ptr            = lsp_tmalloc(uint8_t, allocate);
         port_t *meta            = reinterpret_cast<port_t *>(ptr);
 
         // Copy port metadata
-        memcpy(meta, metadata, elements);
+        ::memcpy(meta, metadata, to_copy);
 
         // Update identifiers if needed
         if (postfix_len > 0)

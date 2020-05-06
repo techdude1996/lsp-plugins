@@ -6,8 +6,10 @@
 
 // Core include
 #include <core/types.h>
-#include <core/midi.h>
+#include <core/protocol/midi.h>
 #include <core/lib.h>
+#include <core/resource.h>
+
 #include <dsp/atomic.h>
 #include <dsp/endian.h>
 #include <plugins/plugins.h>
@@ -15,7 +17,9 @@
 #include <data/cvector.h>
 
 // UI includes
-#include <ui/ui.h>
+#ifndef LSP_NO_VST_UI
+    #include <ui/ui.h>
+#endif
 
 // VST SDK includes
 #include <container/vst/defs.h>
@@ -23,6 +27,11 @@
 #include <container/vst/types.h>
 #include <container/vst/wrapper.h>
 #include <container/vst/ports.h>
+
+#ifdef LSP_NO_VST_UI
+    /* Generate stub resource placeholders if there is no UI requirement */
+    BUILTIN_RESOURCES_STUB
+#endif /* LSP_NO_LV2_UI */
 
 namespace lsp
 {
@@ -427,13 +436,16 @@ namespace lsp
                 break;
             }
 
-            case DECLARE_VST_DEPRECATED (effSetBlockSizeAndSampleRate): // Set block size and sample rate
+            case effSetBlockSizeAndSampleRate: // Set block size and sample rate
+                w->set_block_size(value);
+                w->set_sample_rate(opt);
+                break;
+
+            case effSetBlockSize: // Set block size
+                w->set_block_size(value);
+                break;
+
             case effSetSampleRate: // Set sample rate, always in suspended mode
-                if (opt > MAX_SAMPLE_RATE)
-                {
-                    lsp_error("Unsupported sample rate: %f, maximum supported sample rate is %ld", float(opt), long(MAX_SAMPLE_RATE));
-                    opt = MAX_SAMPLE_RATE;
-                }
                 w->set_sample_rate(opt);
                 break;
 
@@ -456,6 +468,7 @@ namespace lsp
                 break;
             }
 
+#ifndef LSP_NO_VST_UI
             case effEditOpen: // Run editor
             {
                 if (w->show_ui(ptr))
@@ -481,12 +494,12 @@ namespace lsp
                 v = 1;
                 break;
             }
+#endif
 
             case effSetProgram:
             case effGetProgram:
             case effSetProgramName:
             case effGetProgramName:
-            case effSetBlockSize:
                 break;
 
             case effGetChunk:
@@ -500,7 +513,7 @@ namespace lsp
             {
                 if (e->flags & effFlagsProgramChunks)
                 {
-                    w->deserialize_state(ptr);
+                    w->deserialize_state(ptr, value);
                     v = 1;
                 }
                 break;
@@ -528,23 +541,29 @@ namespace lsp
             case effVendorSpecific:
             case effProcessVarIo:
             case effSetSpeakerArrangement:
-            case effSetBypass:
             case effGetTailSize:
                 break;
+
+            case effSetBypass:
+                w->set_bypass(v);
+                break;
+
             case effCanDo:
             {
                 const char *text    = reinterpret_cast<const char *>(ptr);
-                lsp_trace("can_do request: %s\n", text);
+                lsp_trace("effCanDo request: %s\n", text);
                 if (e->flags & effFlagsIsSynth)
                 {
-                    if (!strcmp(text, "receiveVstEvents"))
+                    if (!::strcmp(text, canDoReceiveVstEvents))
                         v = 1;
-                    else if (!strcmp(text, "receiveVstMidiEvent"))
+                    else if (!::strcmp(text, canDoReceiveVstMidiEvent))
                         v = 1;
-                    else if (!strcmp(text, "sendVstEvents"))
+                    else if (!::strcmp(text, canDoSendVstEvents))
                         v = 1;
-                    else if (!strcmp(text, "sendVstMidiEvent"))
+                    else if (!::strcmp(text, canDoSendVstMidiEvent))
                         v = 1;
+                    else if (!::strcmp(text, canDoBypass))
+                        v = w->has_bypass();
                 }
                 break;
             }
@@ -683,7 +702,7 @@ namespace lsp
         const char *plugin_name     = NULL;
         plugin_t *p                 = NULL;
 
-        #define MOD_PLUGIN(plugin) \
+        #define MOD_PLUGIN(plugin, ui) \
             if ((!p) && (plugin::metadata.vst_uid != NULL) && (uid == vst_cconst(plugin::metadata.vst_uid))) \
             { \
                 p   = new plugin(); \
@@ -754,11 +773,13 @@ namespace lsp
 extern "C"
 {
 #endif /* __cplusplus */
+    VST_EXPORT
     AEffect *VST_CREATE_INSTANCE_NAME(VstInt32 uid, audioMasterCallback callback)
     {
         return lsp::vst_instantiate(uid, callback);
     }
 
+    LSP_LIBRARY_EXPORT
     const char *VST_GET_VERSION_NAME()
     {
         return LSP_MAIN_VERSION;

@@ -12,7 +12,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <time.h>
 #include <test/test.h>
 
 #define MTEST_BEGIN(group, name) \
@@ -22,6 +21,9 @@
             using namespace ::test; \
             \
             class mtest_ ## name: public ManualTest { \
+                public: \
+                    typedef mtest_ ## name test_type_t; \
+                \
                 public: \
                     explicit mtest_ ## name() : ManualTest(group, #name) {} \
                     \

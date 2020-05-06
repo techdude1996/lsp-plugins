@@ -26,14 +26,11 @@
 	As opposite to most available multiband compressors, this compressor provides numerous special functions listed below:
 </p>
 <ul>
-	<li><b>Modern operating mode</b> - special operating mode that allows to avoid disadvantages of 'classic' crossover-based compressors.
+	<li><b>Modern operating mode</b> - special operating mode that allows to look different at <b>classic</b> crossover-based compressors.
 	Crossiver-based compressors use crossover filters for splitting the original signal into independent frequency bands, then process
-	each band independently by it's individual compressor. Finally, all bands are summarized and so the output signal is formed.
-	This principle has a huge disadvantage because recursive crossover filters have non-linear phase and that's why even after just splitting signal
-	into separate bands and	summarizing them back, we get the amplitude distortion of the signal. It's not so noticeable when each band
-	is present by frequency range of more than decade Hz but the distortion is very noticeable when there are too many narrow bands.
-	In <b>Modern</b> mode, each band is processed by pair of dynamic shelving filters. This allows to avoid amplitude distortion and
-	preserve the 0 dB transfer function at the whole frequency range when compressor is not working.
+	each band independently by it's individual compressor. Finally, all bands become phase-compensated using all-pass filers and then
+	summarized, so the output signal is formed.
+	In <b>Modern</b> mode, each band is processed by pair of dynamic shelving filters. This allows the better control the gain of each band.
 	</li>
 	<li><b>Sidechain boost</b> - special mode for assigning the same weight for higher frequencies opposite to lower frequencies.
 	In usual case, the frequency band is processed by compressor 'as is'. By the other side, the usual audio signal has 3 db/octave
@@ -108,7 +105,7 @@
 	</ul>
 	<li><b>SC Preamp</b> - applies additional gain to the sidechain band.</li>
 	<li><b>Makeup</b> - applies additional gain to the output of the corresponding compressor.</li>
-	<li><b>Ratio</b> - the compression ration for the corresponding band.</li>
+	<li><b>Ratio</b> - the compression ratio for the corresponding band.</li>
 	<li><b>Knee</b> - the compression knee for the corresponding band.</li>
 	<li><b>Attack Level</b> - threshold of the compressor, placed in the middle of the knee.</li>
 	<li><b>Attack Time</b> - attack time of the compressor.</li>
@@ -154,9 +151,13 @@
 	<li><b>Compressor Ratio</b> - compression ratio.</li>
 	<li><b>Compressor Knee</b> - size of compression knee.</li>
 	<li><b>Compressor Makeup</b> - additional amplification gain after compression stage.</li>
-	<li><b>Compressor Attack Level</b> - threshold of the compressor, placed in the middle of the knee.</li>
+	<li><b>Compressor Boost</b> - this knob is related to <b>upward compression mode</b> only.
+	   It defines the threshold below which the constant amplification will be applied to the input signal. This prevents
+	   the compressor from applying infinite amplification to very quiet signals.
+	</li>
+	<li><b>Compressor Attack Thresh</b> - threshold of the compressor, placed in the middle of the knee.</li>
 	<li><b>Compressor Attack Time</b> - attack time of the compressor.</li>
-	<li><b>Compressor Release Level</b> - relative to the <b>Attack Level</b> threshold that sets up the threshold of <b>Release Time</b>.</li>
+	<li><b>Compressor Release Thresh</b> - relative to the <b>Attack Thresh</b> threshold that sets up the threshold of <b>Release Time</b>.</li>
 	<li><b>Compressor Release Time</b> - release time of the compressor.</li>
 	<li><b>Gain</b> - the amount of gain applied to frequency band by the compression curve.</li>
 </ul>

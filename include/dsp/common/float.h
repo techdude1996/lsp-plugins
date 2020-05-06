@@ -59,14 +59,6 @@ namespace dsp
      */
     extern void (* limit_saturate2)(float *dst, const float *src, size_t count);
 
-    /** Avoid denormal values
-     *
-     * @param dst destination buffer
-     * @param src source buffer
-     * @param count number of samples
-     */
-    extern void (* avoid_denormals)(float *dst, const float *src, size_t count);
-
     /**
      * Limit floating-point data in buffer
      * Replace +Inf with max, -Inf, +NaN, -NaN with min
@@ -93,6 +85,24 @@ namespace dsp
      * @param count number of samples
      */
     extern void (* limit2)(float *dst, const float *src, float min, float max, size_t count);
+
+    /**
+     * Sanitize floating-point samples from NaN's, Inf's and denormal values
+     * Replaces the sanitized values with zeros
+     *
+     * @param dst destination buffer to sanitize
+     * @param count number of samples
+     */
+    extern void (* sanitize1)(float *dst, size_t count);
+
+    /**
+     * Sanitize floating-point samples from NaN's, Inf's and denormal values
+     * Replaces the sanitized values with zeros
+     *
+     * @param dst destination buffer to sanitize
+     * @param count number of samples
+     */
+    extern void (* sanitize2)(float *dst, const float *src, size_t count);
 }
 
 #endif /* DSP_COMMON_FLOAT_H_ */

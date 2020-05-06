@@ -11,11 +11,15 @@ namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlKnob::metadata = { "CtlKnob", &CtlWidget::metadata };
+
         CtlKnob::CtlKnob(CtlRegistry *src, LSPKnob *widget): CtlWidget(src, widget)
         {
-            pPort       = NULL;
-            bLog        = false;
-            bLogSet     = false;
+            pClass          = &metadata;
+            pPort           = NULL;
+            bLog            = false;
+            bLogSet         = false;
+            bCyclingSet     = false;
         }
 
         CtlKnob::~CtlKnob()
@@ -124,8 +128,8 @@ namespace lsp
 
             // Initialize color controllers
             sColor.init_hsl(pRegistry, knob, knob->color(), A_COLOR, A_HUE_ID, A_SAT_ID, A_LIGHT_ID);
-            sBgColor.init_basic(pRegistry, knob, knob->bg_color(), A_BG_COLOR);
             sScaleColor.init_hsl(pRegistry, knob, knob->scale_color(), A_SCALE_COLOR, A_SCALE_HUE_ID, A_SCALE_SAT_ID, A_SCALE_LIGHT_ID);
+            sScaleColor.map_static_hsl(A_SCALE_HUE, -1, -1);
 
             // Bind slots
             knob->slots()->bind(LSPSLOT_CHANGE, slot_change, this);
@@ -176,14 +180,16 @@ namespace lsp
                     if (knob != NULL)
                         PARSE_FLOAT(value, knob->set_balance(__));
                     break;
+                case A_CYCLE:
+                    bCyclingSet = true;
+                    if (knob != NULL)
+                        PARSE_BOOL(value, knob->set_cycling(__); );
+                    break;
                 default:
                 {
-                    bool set = sColor.set(att, value);
-                    set |= sBgColor.set(att, value);
-                    set |= sScaleColor.set(att, value);
-
-                    if (!set)
-                        CtlWidget::set(att, value);
+                    sColor.set(att, value);
+                    sScaleColor.set(att, value);
+                    CtlWidget::set(att, value);
                     break;
                 }
             }
@@ -199,6 +205,9 @@ namespace lsp
 
         void CtlKnob::end()
         {
+            // Call parent controller
+            CtlWidget::end();
+
             // Ensure that widget is set
             if (pWidget == NULL)
                 return;
@@ -221,8 +230,10 @@ namespace lsp
                 float max       = (p->flags & F_UPPER) ? p->max : GAIN_AMP_P_12_DB;
 
                 double step     = base * log((p->flags & F_STEP) ? p->step + 1.0f : 1.01f) * 0.1f;
-                double db_min   = (fabs(min) < GAIN_AMP_M_80_DB) ? (base * log(GAIN_AMP_M_80_DB) - step) : (base * log(min));
-                double db_max   = (fabs(max) < GAIN_AMP_M_80_DB) ? (base * log(GAIN_AMP_M_80_DB) - step) : (base * log(max));
+                double thresh   = ((p->flags & F_EXT) ? GAIN_AMP_M_140_DB : GAIN_AMP_M_80_DB);
+
+                double db_min   = (fabs(min) < thresh) ? (base * log(thresh) - step) : (base * log(min));
+                double db_max   = (fabs(max) < thresh) ? (base * log(thresh) - step) : (base * log(max));
 
                 knob->set_min_value(db_min);
                 knob->set_max_value(db_max);
@@ -247,6 +258,8 @@ namespace lsp
                 knob->set_tiny_step(step);
                 knob->set_value(p->start);
                 knob->set_default_value(p->start);
+                if (!bCyclingSet)
+                    knob->set_cycling(p->flags & F_CYCLIC);
             }
             else if (bLog)  // Float and other values, logarithmic
             {
@@ -272,6 +285,8 @@ namespace lsp
                 knob->set_step(knob->tiny_step() * 10.0f);
                 knob->set_value(p->start);
                 knob->set_default_value(p->start);
+                if (!bCyclingSet)
+                    knob->set_cycling(p->flags & F_CYCLIC);
             }
         }
 

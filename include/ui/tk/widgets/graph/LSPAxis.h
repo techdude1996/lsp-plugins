@@ -33,7 +33,7 @@ namespace lsp
                 size_t          nWidth;
                 ssize_t         nLength;
                 size_t          nCenter;
-                Color           sColor;
+                LSPColor        sColor;
 
             protected:
                 void            set_flag(size_t flag, bool value);
@@ -67,13 +67,15 @@ namespace lsp
 
                 inline bool linear_scale() const    { return !(nFlags & F_LOGARITHMIC); }
 
-                inline Color *color()               { return &sColor;           };
+                inline LSPColor *color()            { return &sColor;           };
 
                 inline size_t line_width() const    { return nWidth;            };
 
                 inline size_t center_id() const     { return nCenter;           };
 
                 inline float angle() const          { return fAngle;            };
+                inline float dir_x() const          { return fDX;               };
+                inline float dir_y() const          { return fDY;               };
 
                 inline size_t length() const        { return nLength;           }
 
@@ -168,6 +170,9 @@ namespace lsp
                 void                set_center_id(size_t value);
 
                 void                set_angle(float value);
+                void                set_direction(float dx, float dy);
+                inline void         set_dir_x(float dx)                 { set_direction(dx, fDY); }
+                inline void         set_dir_y(float dy)                 { set_direction(fDX, dy); }
 
                 void                set_length(ssize_t value);
 

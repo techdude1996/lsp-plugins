@@ -12,6 +12,7 @@
 
 #define BUF_GRANULARITY         8192
 #define GAIN_LOWERING           0.891250938134 /* 0.944060876286 */
+#define MIN_LIMITER_RELEASE     5.0f
 
 namespace lsp
 {
@@ -43,10 +44,9 @@ namespace lsp
     {
         nMaxLookahead       = millis_to_samples(max_sr, max_lookahead);
         size_t alloc        = nMaxLookahead*4 + BUF_GRANULARITY*2;
-        vData               = new uint8_t[alloc*sizeof(float) + DEFAULT_ALIGN];
-        if (vData == NULL)
+        float *ptr          = alloc_aligned<float>(vData, alloc, DEFAULT_ALIGN);
+        if (ptr == NULL)
             return false;
-        float *ptr          = reinterpret_cast<float *>(ALIGN_PTR(vData, DEFAULT_ALIGN));
 
         vGainBuf            = ptr;
         ptr                += nMaxLookahead*4 + BUF_GRANULARITY;
@@ -54,6 +54,9 @@ namespace lsp
         ptr                += BUF_GRANULARITY;
 
         lsp_assert(reinterpret_cast<uint8_t *>(ptr) <= &vData[alloc*sizeof(float) + DEFAULT_ALIGN]);
+
+        dsp::fill_one(vGainBuf, nMaxLookahead*4 + BUF_GRANULARITY);
+        dsp::fill_zero(vTmpBuf, BUF_GRANULARITY);
 
         if (!sDelay.init(nMaxLookahead + BUF_GRANULARITY))
             return false;
@@ -69,7 +72,7 @@ namespace lsp
 
         if (vData != NULL)
         {
-            delete [] vData;
+            free_aligned(vData);
             vData = NULL;
         }
 
@@ -280,12 +283,12 @@ namespace lsp
 //        #endif /* LSP_DEBUG */
     }
 
-    void Limiter::init_comp(comp_t *comp, float time)
+    void Limiter::init_comp(comp_t *comp)
     {
         comp->fKS           = fThreshold * fKnee;
         comp->fKE           = fThreshold / fKnee;
-        comp->fTauAttack    = 1.0f - expf(M_SQRT2 / (millis_to_samples(nSampleRate, fAttack)));
-        comp->fTauRelease   = 1.0f - expf(logf(1.0f - M_SQRT1_2) / (millis_to_samples(nSampleRate, time * fRelease)));
+        comp->fTauAttack    = 1.0f - expf(logf(1.0f - M_SQRT1_2) / (millis_to_samples(nSampleRate, fAttack)));
+        comp->fTauRelease   = 1.0f - expf(logf(1.0f - M_SQRT1_2) / (millis_to_samples(nSampleRate, fRelease + MIN_LIMITER_RELEASE)));
         comp->fAmp          = 1.0f / nLookahead;
         lsp_trace("attack=%f, release=%f, tau_attack=%f, tau_release=%f", fAttack, fRelease, comp->fTauAttack, comp->fTauRelease);
 
@@ -368,7 +371,7 @@ namespace lsp
         switch (nMode)
         {
             case LM_COMPRESSOR:
-                init_comp(&sComp, 20.0f);
+                init_comp(&sComp);
                 break;
 
             case LM_HERM_THIN:
@@ -393,17 +396,17 @@ namespace lsp
                 break;
 
             case LM_MIXED_HERM:
-                init_comp(&sMixed.sComp, 20.0f);
+                init_comp(&sMixed.sComp);
                 init_sat(&sMixed.sSat);
                 break;
 
             case LM_MIXED_EXP:
-                init_comp(&sMixed.sComp, 20.0f);
+                init_comp(&sMixed.sComp);
                 init_exp(&sMixed.sExp);
                 break;
 
             case LM_MIXED_LINE:
-                init_comp(&sMixed.sComp, 20.0f);
+                init_comp(&sMixed.sComp);
                 init_line(&sMixed.sLine);
                 break;
 
@@ -419,7 +422,7 @@ namespace lsp
     {
         if (comp->fEnvelope < comp->fKS)
             return 1.0f;
-        else if (comp->fEnvelope > comp->fKE)
+        else if (comp->fEnvelope >= comp->fKE)
             return fThreshold / comp->fEnvelope;
 
         float lx    = logf(comp->fEnvelope);
@@ -563,7 +566,6 @@ namespace lsp
 
             // Get delayed sample
             float ds    = sDelay.process(src[i]);
-            float ads   = (ds < 0.0f) ? -ds : ds;
 
             // Check that limiter has triggered (overwrite sidechain signal)
             if (sComp.nCountdown > 0)
@@ -591,13 +593,6 @@ namespace lsp
                                     sComp.fTauAttack * (ls - sComp.fEnvelope) :
                                     sComp.fTauRelease * (ls - sComp.fEnvelope);
             float r             = reduction(&sComp);
-
-            // Prevent from overloading and store processed sample
-            if ((r*ads) >= fThreshold)
-            {
-                sComp.fEnvelope     = sComp.fKE; // Force env to be of specified size
-                r                   = fThreshold / ads;
-            }
 
             gain[i]             = r;
             dst[i]              = r*ds;
@@ -748,8 +743,8 @@ namespace lsp
                 }
                 else if (ls >= fThreshold)
                 {
-                    comp->fSample         = ls;
-                    comp->nCountdown      = nLookahead;
+                    comp->fSample       = ls;
+                    comp->nCountdown    = nLookahead;
                 }
 
                 // Calculate envelope and reduction
@@ -852,6 +847,11 @@ namespace lsp
 
     void Limiter::process(float *dst, float *gain, const float *src, const float *sc, size_t samples)
     {
+        // Force settings update if there are any
+        if (nUpdate)
+            update_settings();
+
+        // Perform processing
         switch (nMode)
         {
             case LM_COMPRESSOR:
@@ -905,7 +905,7 @@ namespace lsp
             }
 
             if (max > fThreshold)
-                dsp::scale2(gain, (fThreshold - 0.000001f)/max, to_do);
+                dsp::mul_k2(gain, (fThreshold - 0.000001f)/max, to_do);
 
             // Move pointers
             nThresh    -= to_do;

@@ -8,7 +8,7 @@
 #ifndef UI_CTL_CTLAUDIOFILE_H_
 #define UI_CTL_CTLAUDIOFILE_H_
 
-#include <core/io/IInputStream.h>
+#include <core/io/IInStream.h>
 #include <ui/ctl/CtlPortHandler.h>
 
 namespace lsp
@@ -17,6 +17,9 @@ namespace lsp
     {
         class CtlAudioFile: public CtlWidget
         {
+            public:
+                static const ctl_class_t metadata;
+
             protected:
                 enum const_t
                 {
@@ -24,8 +27,23 @@ namespace lsp
                 };
 
             protected:
+                class DataSink: public LSPTextDataSink
+                {
+                    private:
+                        CtlAudioFile *pFile;
+
+                    public:
+                        explicit DataSink(CtlAudioFile *file);
+                        virtual ~DataSink();
+
+                    public:
+                        virtual status_t    on_complete(status_t code, const LSPString *data);
+
+                        void unbind();
+                };
+
+            protected:
                 CtlColor        sColor;
-                CtlColor        sBgColor;
                 CtlPadding      sPadding;
                 CtlExpression   sFormat;
                 LSPMenu         sMenu;
@@ -42,6 +60,7 @@ namespace lsp
                 CtlPort        *pFadeIn;
                 CtlPort        *pFadeOut;
                 CtlPort        *pPath;
+                DataSink       *pDataSink;
 
             protected:
                 void            sync_status();
@@ -62,10 +81,10 @@ namespace lsp
                 static status_t     slot_popup_paste_action(LSPWidget *sender, void *ptr, void *data);
                 static status_t     slot_popup_clear_action(LSPWidget *sender, void *ptr, void *data);
 
-                static status_t     clipboard_handler(void *arg, status_t s, io::IInputStream *is);
+                static status_t     clipboard_handler(void *arg, status_t s, io::IInStream *is);
 
             public:
-                CtlAudioFile(CtlRegistry *src, LSPAudioFile *af);
+                explicit CtlAudioFile(CtlRegistry *src, LSPAudioFile *af);
                 virtual ~CtlAudioFile();
 
             public:

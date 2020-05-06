@@ -43,7 +43,7 @@ namespace lsp
         pDescr      = NULL;
     }
 
-    int impulse_responses_base::IRLoader::run()
+    status_t impulse_responses_base::IRLoader::run()
     {
         return pCore->load(pDescr);
     }
@@ -64,7 +64,7 @@ namespace lsp
         pCore       = NULL;
     }
 
-    int impulse_responses_base::IRConfigurator::run()
+    status_t impulse_responses_base::IRConfigurator::run()
     {
         return pCore->reconfigure(sReconfig);
     }
@@ -311,6 +311,8 @@ namespace lsp
             lsp_trace("Binding impulse file #%d ports", int(i));
             af_descriptor_t *f  = &vFiles[i];
 
+            f->sListen.init();
+
             TRACE_PORT(vPorts[port_id]);
             f->pFile        = vPorts[port_id++];
             TRACE_PORT(vPorts[port_id]);
@@ -447,14 +449,19 @@ namespace lsp
             }
 
             // Listen button pressed?
-            if (f->pListen->getValue() >= 0.5f)
+            if (f->pListen != NULL)
+                f->sListen.submit(f->pListen->getValue());
+
+            if (f->sListen.pending())
             {
+                lsp_trace("Submitted listen toggle");
                 size_t n_c = (f->pCurrSample != NULL) ? f->pCurrSample->channels() : 0;
                 if (n_c > 0)
                 {
                     for (size_t j=0; j<nChannels; ++j)
                         vChannels[j].sPlayer.play(i, j%n_c, 1.0f, 0);
                 }
+                f->sListen.commit();
             }
 
             size_t source       = c->pSource->getValue();
@@ -843,6 +850,8 @@ namespace lsp
             ssize_t fsamples    = flen - head_cut - tail_cut;
             if (fsamples <= 0)
             {
+                for (size_t j=0; j<channels; ++j)
+                    dsp::fill_zero(f->vThumbs[j], impulse_responses_base_metadata::MESH_SIZE);
                 s->setLength(0);
                 continue;
             }
@@ -877,7 +886,7 @@ namespace lsp
 
                 // Normalize graph if possible
                 if (f->fNorm != 1.0f)
-                    dsp::scale2(dst, f->fNorm, impulse_responses_base_metadata::MESH_SIZE);
+                    dsp::mul_k2(dst, f->fNorm, impulse_responses_base_metadata::MESH_SIZE);
             }
         }
 

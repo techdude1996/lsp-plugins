@@ -12,7 +12,7 @@ namespace lsp
 {
     namespace tk
     {
-        const w_class_t LSPEdit::metadata = { "LSPEdit", &LSPEdit::metadata };
+        const w_class_t LSPEdit::metadata = { "LSPEdit", &LSPWidget::metadata };
 
         //-----------------------------------------------------------------------------
         // LSPEdit::TextSelection implementation
@@ -85,6 +85,104 @@ namespace lsp
         }
 
         //-----------------------------------------------------------------------------
+        // LSPEdit::DataSink implementation
+        LSPEdit::DataSink::DataSink(LSPEdit *widget)
+        {
+            pEdit   = widget;
+            pMime   = NULL;
+        }
+
+        LSPEdit::DataSink::~DataSink()
+        {
+            unbind();
+        }
+
+        void LSPEdit::DataSink::unbind()
+        {
+            if (pEdit != NULL)
+            {
+                if (pEdit->pDataSink == this)
+                    pEdit->pDataSink = NULL;
+                pEdit       = NULL;
+            }
+
+            sOS.drop();
+
+            if (pMime != NULL)
+            {
+                ::free(pMime);
+                pMime   = NULL;
+            }
+        }
+
+        ssize_t LSPEdit::DataSink::open(const char * const *mime_types)
+        {
+            const char *mime = NULL;
+            size_t i=0, idx = 0;
+            for (const char * const *p = mime_types; *p != NULL; ++p, ++i)
+            {
+                lsp_trace("available mime type: %s", *p);
+                if (!::strcasecmp(*p, "text/plain"))
+                {
+                    mime    = *p;
+                    idx     = i;
+                }
+                else if (!::strcasecmp(*p, "utf8_string"))
+                {
+                    mime    = *p;
+                    idx     = i;
+                    break;
+                }
+            }
+            if (mime == NULL)
+                return -STATUS_UNSUPPORTED_FORMAT;
+            pMime   = ::strdup(mime);
+            lsp_trace("Selected mime type: %s, index=%d", pMime, int(idx));
+            return (pMime != NULL) ? idx : -STATUS_NO_MEM;
+        }
+
+        status_t LSPEdit::DataSink::write(const void *buf, size_t count)
+        {
+            if (pEdit == NULL)
+                return STATUS_CANCELLED;
+            if (pMime == NULL)
+                return STATUS_CLOSED;
+            ssize_t written = sOS.write(buf, count);
+            return (written >= ssize_t(count)) ? STATUS_OK : STATUS_UNKNOWN_ERR;
+        }
+
+        status_t LSPEdit::DataSink::close(status_t code)
+        {
+            lsp_trace("code: %x", int(code));
+            if ((pMime == NULL) || (pEdit == NULL))
+            {
+                unbind();
+                return STATUS_OK;
+            }
+
+            // Commit data
+            if (code == STATUS_OK)
+            {
+                LSPString tmp;
+
+                bool ok = false;
+                if (!::strcasecmp(pMime, "utf8_string"))
+                    ok  = tmp.set_utf8(reinterpret_cast<const char *>(sOS.data()), sOS.size());
+                else
+                    ok  = tmp.set_native(reinterpret_cast<const char *>(sOS.data()), sOS.size());
+
+                // Successful set?
+                if (ok)
+                    pEdit->paste_clipboard(&tmp);
+            }
+
+            // Unbind
+            unbind();
+
+            return STATUS_OK;
+        }
+
+        //-----------------------------------------------------------------------------
         // LSPEdit implementation
         LSPEdit::LSPEdit(LSPDisplay *dpy):
             LSPWidget(dpy),
@@ -92,6 +190,8 @@ namespace lsp
             sCursor(this),
             sFont(dpy, this),
             sInput(this),
+            sColor(this),
+            sSelColor(this),
             sStdPopup(dpy)
         {
             sTextPos        = 0;
@@ -99,6 +199,7 @@ namespace lsp
             nMBState        = 0;
             nScrDirection   = 0;
             pPopup          = &sStdPopup;
+            pDataSink       = NULL;
             pClass          = &metadata;
 
             vStdItems[0]    = NULL;
@@ -129,13 +230,12 @@ namespace lsp
                 if (theme != NULL)
                 {
                     sFont.init(theme->font());
-
-                    theme->get_color(C_BACKGROUND, sFont.color());
-                    theme->get_color(C_BACKGROUND, &sBgColor);
-                    theme->get_color(C_LABEL_TEXT, &sColor);
-                    theme->get_color(C_KNOB_SCALE, &sSelColor);
+                    init_color(C_BACKGROUND, sFont.color());
                 }
             }
+
+            init_color(C_LABEL_TEXT, &sColor);
+            init_color(C_KNOB_SCALE, &sSelColor);
 
             // Initialize standard menu
             ui_handler_id_t id = 0;
@@ -146,7 +246,7 @@ namespace lsp
             vStdItems[0] = mi;
             LSP_STATUS_ASSERT(mi->init());
             LSP_STATUS_ASSERT(sStdPopup.add(mi));
-            LSP_STATUS_ASSERT(mi->set_text("Cut"));
+            LSP_STATUS_ASSERT(mi->text()->set("actions.edit.cut"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_cut_action, self());
             if (id < 0)
                 return -id;
@@ -157,7 +257,7 @@ namespace lsp
             vStdItems[1] = mi;
             LSP_STATUS_ASSERT(mi->init());
             LSP_STATUS_ASSERT(sStdPopup.add(mi));
-            LSP_STATUS_ASSERT(mi->set_text("Copy"));
+            LSP_STATUS_ASSERT(mi->text()->set("actions.edit.copy"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_copy_action, self());
             if (id < 0)
                 return -id;
@@ -168,7 +268,7 @@ namespace lsp
             vStdItems[2] = mi;
             LSP_STATUS_ASSERT(mi->init());
             LSP_STATUS_ASSERT(sStdPopup.add(mi));
-            LSP_STATUS_ASSERT(mi->set_text("Paste"));
+            LSP_STATUS_ASSERT(mi->text()->set("actions.edit.paste"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_paste_action, self());
             if (id < 0)
                 return -id;
@@ -191,6 +291,12 @@ namespace lsp
                     delete vStdItems[i];
                     vStdItems[i] = NULL;
                 }
+
+            if (pDataSink != NULL)
+            {
+                pDataSink->unbind();
+                pDataSink   = NULL;
+            }
 
             LSPWidget::destroy();
         }
@@ -226,17 +332,19 @@ namespace lsp
         {
             if (sSelection.valid() && sSelection.non_empty())
             {
-                LSPTextClipboard *cb = new LSPTextClipboard();
-                if (cb == NULL)
+                LSPTextDataSource *src = new LSPTextDataSource();
+                if (src == NULL)
                     return;
+                src->acquire();
 
+                // Set the selection
                 ssize_t first, last;
                 sSelection.read_range(&first, &last);
-
-                status_t result = cb->update_text(&sText, first, last);
+                status_t result = src->set_text(&sText, first, last);
                 if (result == STATUS_OK)
-                    pDisplay->write_clipboard(bufid, cb);
-                cb->close();
+                    pDisplay->set_clipboard(bufid, src);
+
+                src->release();
             }
         }
 
@@ -256,6 +364,8 @@ namespace lsp
                     sSelection.set_first(len);
                 if (sSelection.last() > len)
                     sSelection.set_last(len);
+                if (sSelection.length() <= 0)
+                    sSelection.clear();
             }
             return STATUS_OK;
         }
@@ -312,14 +422,24 @@ namespace lsp
             text_parameters_t tp;
             ssize_t pad  = 3;
 
-            s->clear(sBgColor);
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color color(sColor);
+            Color fcol(sFont.raw_color());
+            Color sel_col(sSelColor);
 
+            color.scale_lightness(brightness());
+            fcol.scale_lightness(brightness());
+            sel_col.scale_lightness(brightness());
+
+            // Draw background
+            s->clear(bg_color);
+
+            // Draw
             bool aa = s->set_antialiasing(true);
-            s->fill_round_rect(0.5f, 0.5f, sSize.nWidth - 1, sSize.nHeight - 1, 4, SURFMASK_ALL_CORNER, sColor);
+            s->fill_round_rect(0.5f, 0.5f, sSize.nWidth - 1, sSize.nHeight - 1, 4, SURFMASK_ALL_CORNER, color);
 
             s->set_antialiasing(aa);
-            Color *fcol = sFont.color();
-
             ssize_t fw = sSize.nWidth - pad *2;
 
             sFont.get_parameters(s, &fp);
@@ -372,60 +492,56 @@ namespace lsp
                 if (first > 0)
                 {
                     sFont.get_text_parameters(s, &tp, &sText, 0, first);
-                    sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, &sText, 0, first);
+                    sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, fcol, &sText, 0, first);
                     xpos           += /*tp.XBearing + */ tp.XAdvance;
                 }
                 sFont.get_text_parameters(s, &tp, &sText, first, last);
-                s->fill_rect(xpos, pad, tp.XBearing + tp.XAdvance, sSize.nHeight - pad*2, sSelColor);
-                sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, sColor, &sText, first, last);
+                s->fill_rect(xpos, pad, tp.XBearing + tp.XAdvance, sSize.nHeight - pad*2, sel_col);
+                sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, color, &sText, first, last);
                 xpos           += /*tp.XBearing + */ tp.XAdvance;
 
                 if (last < ssize_t(sText.length()))
                 {
                     sFont.get_text_parameters(s, &tp, &sText, last);
-                    sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, &sText, last);
+                    sFont.draw(s, xpos, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, fcol, &sText, last);
                     xpos           += /*tp.XBearing + */ tp.XAdvance;
                 }
             }
             else
-                sFont.draw(s, sTextPos + pad, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, &sText);
+                sFont.draw(s, sTextPos + pad, pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f + fp.Ascent, fcol, &sText);
 
             // Draw cursor if required
             if (sCursor.visible() && sCursor.shining())
             {
-//                sFont.get_text_parameters(s, &tp, &sText, ileft, sCursor.location());
-//                ileft += sCursor.location();
                 float cleft = xleft + pad ; // + tp.XAdvance + tp.XBearing;
                 float ctop  = pad + (sSize.nHeight - pad * 2 - fp.Height)*0.5f;
 
                 if (sCursor.inserting())
                 {
                     if ((sSelection.valid()) && (!sSelection.is_empty()))
-                        s->line(cleft + 0.5f, ctop, cleft, ctop + fp.Height, 1.0f, sBgColor);
+                        s->line(cleft + 0.5f, ctop, cleft, ctop + fp.Height, 1.0f, bg_color);
                     else
-                        s->line(cleft + 0.5f, ctop, cleft, ctop + fp.Height, 1.0f, *fcol);
+                        s->line(cleft + 0.5f, ctop, cleft, ctop + fp.Height, 1.0f, fcol);
                 }
                 else // replacing
                 {
                     if (sCursor.position() >= ssize_t(sText.length()))
                     {
                         sFont.get_text_parameters(s, &tp, "_");
-                        s->fill_rect(cleft, pad, tp.XAdvance, sSize.nHeight - pad * 2, sBgColor);
+                        s->fill_rect(cleft, pad, tp.XAdvance, sSize.nHeight - pad * 2, bg_color);
                     }
                     else
                     {
                         sFont.get_text_parameters(s, &tp, &sText, sCursor.position(), sCursor.position() + 1);
                         ssize_t xw = (tp.XAdvance > tp.Width) ? tp.XAdvance : tp.Width + 1;
-                        s->fill_rect(cleft + tp.XBearing - 1, pad, xw, sSize.nHeight - pad * 2, sBgColor);
-                        sFont.draw(s, cleft, ctop + fp.Ascent, sColor, &sText, sCursor.position(), sCursor.position() + 1);
-//                        sFont.get_text_parameters(s, &tp, &sText, sCursor.position(), sCursor.position() + 1);
-//                        s->line(cleft, sSize.nHeight - pad - 0.5f, cleft + tp.XAdvance, sSize.nHeight - pad - 0.5f, 1.0f, *fcol);
+                        s->fill_rect(cleft + tp.XBearing - 1, pad, xw, sSize.nHeight - pad * 2, bg_color);
+                        sFont.draw(s, cleft, ctop + fp.Ascent, color, &sText, sCursor.position(), sCursor.position() + 1);
                     }
                 }
             }
 
             s->set_antialiasing(true);
-            s->wire_round_rect(0.5f, 0.5f, sSize.nWidth - 1, sSize.nHeight - 1, 4, SURFMASK_ALL_CORNER, 1, sColor);
+            s->wire_round_rect(0.5f, 0.5f, sSize.nWidth - 1, sSize.nHeight - 1, 4, SURFMASK_ALL_CORNER, 1, color);
 
             s->set_antialiasing(aa);
         }
@@ -563,7 +679,11 @@ namespace lsp
                     pPopup->show(this, e);
             }
             else if ((nMBState == (1 << MCB_LEFT)) && (e->nCode == MCB_LEFT))
+            {
                 update_clipboard(CBUF_PRIMARY);
+                if (sSelection.length() <= 0)
+                    sSelection.clear();
+            }
             else if ((nMBState == (1 << MCB_MIDDLE)) && (e->nCode == MCB_MIDDLE))
             {
                 ssize_t first = mouse_to_cursor_pos(e->nLeft, e->nTop);
@@ -612,13 +732,13 @@ namespace lsp
             return STATUS_OK;
         }
 
-        status_t LSPEdit::clipboard_handler(void *arg, status_t s, io::IInputStream *is)
+        status_t LSPEdit::clipboard_handler(void *arg, status_t s, io::IInStream *is)
         {
             LSPEdit *_this = widget_ptrcast<LSPEdit>(arg);
             return ((s == STATUS_OK) && (_this != NULL) && (is != NULL)) ? _this->paste_data(is) : STATUS_BAD_STATE;
         }
 
-        status_t LSPEdit::paste_data(io::IInputStream *is)
+        status_t LSPEdit::paste_data(io::IInStream *is)
         {
             LSPString s;
             size_t avail = is->avail();
@@ -633,7 +753,7 @@ namespace lsp
                 if (count <= 0)
                 {
                     delete [] buf;
-                    return is->error_code();
+                    return is->last_error();
                 }
                 dst    += count;
                 avail  -= count;
@@ -654,6 +774,24 @@ namespace lsp
             sCursor.set_location(pos);
             sSelection.set(pos);
             return STATUS_OK;
+        }
+
+        void LSPEdit::paste_clipboard(const LSPString *s)
+        {
+            if (sSelection.valid() && sSelection.non_empty())
+            {
+                sText.remove(sSelection.starting(), sSelection.ending());
+                sCursor.set_location(sSelection.starting());
+                sSelection.clear();
+            }
+
+            size_t pos = sCursor.location();
+            if (!sText.insert(pos, s))
+                return;
+
+            pos += s->length();
+            sCursor.set_location(pos);
+            sSelection.set(pos);
         }
 
         status_t LSPEdit::on_key_down(const ws_event_t *e)
@@ -718,18 +856,18 @@ namespace lsp
             switch (key)
             {
                 case WSK_HOME:
-                    sCursor.set_location(0);
                     if (e->nState & MCF_SHIFT)
                         sSelection.set_last(0);
                     else
                         sSelection.clear();
+                    sCursor.set_location(0);
                     break;
                 case WSK_END:
-                    sCursor.set_location(sText.length());
                     if (e->nState & MCF_SHIFT)
                         sSelection.set_last(sText.length());
                     else
                         sSelection.clear();
+                    sCursor.set_location(sText.length());
                     break;
                 case WSK_LEFT:
                     sCursor.move(-1);
@@ -807,13 +945,31 @@ namespace lsp
 
         void LSPEdit::request_clipboard(size_t bufid)
         {
-            if (sSelection.valid() && sSelection.non_empty())
+            // Unbind previous data sink
+            if (pDataSink != NULL)
             {
-                sText.remove(sSelection.starting(), sSelection.ending());
-                sCursor.set_location(sSelection.starting());
-                sSelection.clear();
+                pDataSink->unbind();
+                pDataSink = NULL;
             }
-            pDisplay->fetch_clipboard(bufid, "UTF8_STRING", clipboard_handler, self());
+
+            // Create new data sink and run
+            DataSink *sink  = new DataSink(this);
+            if (sink == NULL)
+                return;
+            pDataSink       = sink;
+
+            // Request clipboard contents in async mode
+            pDisplay->get_clipboard(bufid, sink);
+
+//            pDisplay->get_clipboard(bufid, sink);
+//
+//            if (sSelection.valid() && sSelection.non_empty())
+//            {
+//                sText.remove(sSelection.starting(), sSelection.ending());
+//                sCursor.set_location(sSelection.starting());
+//                sSelection.clear();
+//            }
+//            pDisplay->fetch_clipboard(bufid, "UTF8_STRING", clipboard_handler, self());
         }
 
         status_t LSPEdit::on_key_up(const ws_event_t *e)

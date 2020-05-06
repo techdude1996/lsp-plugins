@@ -24,7 +24,7 @@ namespace lsp
         pCore = NULL;
     }
 
-    int nonlinear_convolver_mono::Loader::run()
+    status_t nonlinear_convolver_mono::Loader::run()
     {
         pCore->bDataLoaded = false;
 
@@ -68,7 +68,7 @@ namespace lsp
         pCore = NULL;
     }
 
-    int nonlinear_convolver_mono::Preparator::run()
+    status_t nonlinear_convolver_mono::Preparator::run()
     {
         pCore->bDSP_Valid = false;
 
@@ -610,7 +610,7 @@ namespace lsp
                 }
             }
 
-            dsp::scale2(vBuffer, fOutGain, to_do);
+            dsp::mul_k2(vBuffer, fOutGain, to_do);
 
             sBypass.process(out, in, vBuffer, to_do);
 

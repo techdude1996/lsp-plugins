@@ -1,18 +1,29 @@
+
 #include <sys/types.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <ladspa.h>
-
 #include <core/types.h>
 #include <core/lib.h>
 #include <core/debug.h>
-#include <core/NativeExecutor.h>
+#include <core/ipc/NativeExecutor.h>
+#include <core/resource.h>
 #include <plugins/plugins.h>
+
+#ifdef PLATFORM_WINDOWS
+    #include <3rdparty/ladspa/ladspa.h>
+#else
+    #include <ladspa.h>
+#endif /* PLATFORM_WINDOWS */
 
 #include <container/ladspa/ports.h>
 #include <container/ladspa/wrapper.h>
+
+#ifndef LSP_IDE_DEBUG
+    /* LADSPA format does not require any built-in resources */
+    BUILTIN_RESOURCES_STUB
+#endif /* LSP_IDE_DEBUG */
 
 namespace lsp
 {
@@ -49,7 +60,7 @@ namespace lsp
         // Instantiate plugin
         plugin_t *p         = NULL;
 
-        #define MOD_PLUGIN(plugin) \
+        #define MOD_PLUGIN(plugin, ui) \
             if ((!p) && (plugin::metadata.ladspa_id > 0) && (Descriptor->UniqueID == plugin::metadata.ladspa_id) && (!strcmp(Descriptor->Label, LSP_PLUGIN_URI(ladspa, plugin)))) \
                 p = new plugin();
         #include <metadata/modules.h>
@@ -119,12 +130,12 @@ namespace lsp
     void ladspa_make_descriptor(LADSPA_Descriptor *d, unsigned long id, const char *label, const plugin_metadata_t &m)
     {
         char *plugin_name = NULL;
-        asprintf(&plugin_name, "%s - %s", m.description, m.name);
+        int n = asprintf(&plugin_name, "%s - %s", m.description, m.name);
 
         d->UniqueID             = id;
         d->Label                = label;
         d->Properties           = LADSPA_PROPERTY_HARD_RT_CAPABLE;
-        d->Name                 = plugin_name;
+        d->Name                 = (n >= 0) ? plugin_name : NULL;
         d->Maker                = LSP_ACRONYM " LADSPA";
         d->ImplementationData   = const_cast<char *>(m.developer->name);
         d->Copyright            = LSP_COPYRIGHT;
@@ -286,7 +297,7 @@ namespace lsp
 
         // Calculate number of plugins
         ladspa_descriptors_count    = 0;
-        #define MOD_PLUGIN(plugin) \
+        #define MOD_PLUGIN(plugin, ui) \
             if (plugin::metadata.ladspa_id > 0) \
                 ladspa_descriptors_count++;
         #include <metadata/modules.h>
@@ -296,7 +307,7 @@ namespace lsp
         LADSPA_Descriptor *d        = ladspa_descriptors;
         size_t id                   = 0;
 
-        #define MOD_PLUGIN(plugin) \
+        #define MOD_PLUGIN(plugin, ui) \
             if (plugin::metadata.ladspa_id > 0) \
             { \
                 ladspa_make_descriptor(&d[id], plugin::metadata.ladspa_id, LSP_PLUGIN_URI(ladspa, plugin), plugin::metadata); \
@@ -333,10 +344,18 @@ namespace lsp
     static StaticFinalizer ladspa_finalizer(ladspa_drop_descriptors);
 }
 
-const LADSPA_Descriptor * ladspa_descriptor(unsigned long index)
+#ifdef __cplusplus
+extern "C"
 {
-    using namespace lsp;
+#endif
+    LSP_LIBRARY_EXPORT
+    const LADSPA_Descriptor * ladspa_descriptor(unsigned long index)
+    {
+        using namespace lsp;
 
-    ladspa_gen_descriptors();
-    return (index < ladspa_descriptors_count) ? &ladspa_descriptors[index] : NULL;
+        ladspa_gen_descriptors();
+        return (index < ladspa_descriptors_count) ? &ladspa_descriptors[index] : NULL;
+    }
+#ifdef __cplusplus
 }
+#endif

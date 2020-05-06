@@ -13,9 +13,32 @@ namespace lsp
     {
         const w_class_t LSPWindow::metadata = { "LSPWindow", &LSPWidgetContainer::metadata };
 
+        void LSPWindow::Title::sync()
+        {
+            LSPWindow *window = widget_cast<LSPWindow>(pWidget);
+            if ((window == NULL) || (window->pWindow == NULL))
+                return;
+
+            LSPString text;
+            status_t res = window->sTitle.format(&text);
+            if (res != STATUS_OK)
+                return;
+
+            char *ascii = text.clone_ascii();
+            const char *caption = text.get_utf8();
+            if (caption == NULL)
+                caption = "";
+
+            window->pWindow->set_caption((ascii != NULL) ? ascii : "", caption);
+            if (ascii != NULL)
+                ::free(ascii);
+        }
+
         LSPWindow::LSPWindow(LSPDisplay *dpy, void *handle, ssize_t screen):
             LSPWidgetContainer(dpy),
-            sActions(this)
+            sActions(this),
+            sBorder(this),
+            sTitle(this)
         {
             lsp_trace("native_handle = %p", handle);
 
@@ -34,6 +57,7 @@ namespace lsp
             nHorPos         = 0.5f;
             nVertScale      = 0.0f;
             nHorScale       = 0.0f;
+            nBorder         = 0;
 
             sSize.nLeft     = -1;
             sSize.nTop      = -1;
@@ -62,6 +86,9 @@ namespace lsp
             if (result < 0)
                 return result;
 
+            // Init color
+            init_color(C_LABEL_TEXT, &sBorder);
+
             // Add slot(s)
             ui_handler_id_t id = 0;
             id = sSlots.add(LSPSLOT_CLOSE, slot_window_close, self());
@@ -73,6 +100,7 @@ namespace lsp
             if (dpy == NULL)
                 return STATUS_BAD_STATE;
 
+            sTitle.bind();
             sRedraw.bind(dpy);
             sRedraw.set_handler(tmr_redraw_request, self());
 
@@ -133,14 +161,6 @@ namespace lsp
             if (sSize.nHeight < 0)
                 sSize.nHeight   = r.nHeight;
 
-
-//            result = sync_size();
-//            if (result != STATUS_SUCCESS)
-//            {
-//                destroy();
-//                return result;
-//            }
-
             lsp_trace("Window has been initialized");
 
             return STATUS_OK;
@@ -166,8 +186,22 @@ namespace lsp
                 if (sr.nMinHeight > 0)
                     r.nHeight       = sr.nMinHeight;
             }
+            else
+            {
+                // Check whether window matches constraints
+                if ((sr.nMaxWidth > 0) && (r.nWidth > sr.nMaxWidth))
+                    r.nWidth        = sr.nMaxWidth;
+                if ((sr.nMaxHeight > 0) && (r.nHeight > sr.nMaxHeight))
+                    r.nHeight       = sr.nMaxHeight;
 
-            pWindow->resize(r.nWidth, r.nHeight);
+                if ((sr.nMinWidth > 0) && (r.nWidth < sr.nMinWidth))
+                    r.nWidth        = sr.nMinWidth;
+                if ((sr.nMinHeight > 0) && (r.nHeight < sr.nMinHeight))
+                    r.nHeight       = sr.nMinHeight;
+            }
+
+            if ((sSize.nWidth != r.nWidth) && (sSize.nHeight != r.nHeight))
+                pWindow->resize(r.nWidth, r.nHeight);
 
             return STATUS_OK;
         }
@@ -201,8 +235,6 @@ namespace lsp
                 return STATUS_BAD_ARGUMENTS;
 
             LSPWidget *widget = static_cast<LSPWidget *>(args);
-//            if (widget->get_class() != W_WINDOW)
-//                return STATUS_BAD_ARGUMENTS;
 
             LSPWindow *_this   = static_cast<LSPWindow *>(widget);
 
@@ -265,29 +297,42 @@ namespace lsp
 
         void LSPWindow::render(ISurface *s, bool force)
         {
-            if (pChild != NULL)
-            {
-                if ((force) || (pChild->redraw_pending()))
-                {
-                    pChild->render(s, force);
-                    pChild->commit_redraw();
-                }
+            Color bg_color(sBgColor);
 
-                if (force)
-                {
-                    Color cl;
-                    pDisplay->theme()->get_color(C_BACKGROUND, &cl);
-                    s->fill_frame(
-                        0, 0, sSize.nWidth, sSize.nHeight,
-                        pChild->left(), pChild->top(), pChild->width(), pChild->height(),
-                        cl);
-                }
-            }
-            else
+            if (pChild == NULL)
             {
-                Color cl;
-                pDisplay->theme()->get_color(C_BACKGROUND, &cl);
-                s->clear(cl);
+                s->clear(bg_color);
+                return;
+            }
+
+            if ((force) || (pChild->redraw_pending()))
+            {
+                pChild->render(s, force);
+                pChild->commit_redraw();
+            }
+
+            if (force)
+            {
+                s->fill_frame(
+                    0, 0, sSize.nWidth, sSize.nHeight,
+                    pChild->left(), pChild->top(), pChild->width(), pChild->height(),
+                    bg_color);
+
+                if (nBorder > 0)
+                {
+                    bool aa = s->set_antialiasing(true);
+                    ssize_t bw = nBorder >> 1;
+
+                    Color border(sBorder);
+                    border.scale_lightness(brightness());
+
+                    s->wire_round_rect(
+                        bw + 0.5, bw + 0.5, sSize.nWidth - nBorder-1, sSize.nHeight - nBorder-1,
+                        2, SURFMASK_ALL_CORNER, nBorder,
+                        border
+                    );
+                    s->set_antialiasing(aa);
+                }
             }
         }
 
@@ -326,6 +371,24 @@ namespace lsp
                 return STATUS_OK;
             pPointed    = (focus != this) ? focus : this;
             return update_pointer();
+        }
+
+        void LSPWindow::set_border(size_t border)
+        {
+            if (nBorder == border)
+                return;
+            nBorder     = border;
+            query_resize();
+        }
+
+        status_t LSPWindow::grab_events(grab_t grab)
+        {
+            return (pWindow != NULL) ? pWindow->grab_events(grab) : STATUS_BAD_STATE;
+        }
+
+        status_t LSPWindow::ungrab_events()
+        {
+            return (pWindow != NULL) ? pWindow->ungrab_events() : STATUS_BAD_STATE;
         }
 
         void LSPWindow::set_policy(window_poilicy_t policy)
@@ -403,6 +466,16 @@ namespace lsp
                     case BS_DIALOG:
                     {
                         realize_t r, rw;
+                        r.nLeft     = 0;
+                        r.nTop      = 0;
+                        r.nWidth    = 0;
+                        r.nHeight   = 0;
+
+                        rw.nLeft    = 0;
+                        rw.nTop     = 0;
+                        rw.nWidth   = 0;
+                        rw.nHeight  = 0;
+
                         wnd->get_geometry(&r);
                         pWindow->get_geometry(&rw);
 
@@ -530,7 +603,7 @@ namespace lsp
                 }
 
                 default:
-                    result = LSPWidgetContainer::handle_event(e);
+                    result      = LSPWidgetContainer::handle_event(e);
                     break;
             }
 
@@ -605,6 +678,8 @@ namespace lsp
 
         status_t LSPWindow::resize(ssize_t width, ssize_t height)
         {
+            lsp_trace("Resize: width=%d, height=%d", int(width), int(height));
+
             if (pWindow != NULL)
             {
                 status_t r = pWindow->resize(width, height);
@@ -854,6 +929,8 @@ namespace lsp
 
         status_t LSPWindow::unfocus_child(LSPWidget *focus)
         {
+            if (pPointed == focus)
+                pPointed = NULL;
             if (focus != pFocus)
                 return STATUS_OK;
 
@@ -896,48 +973,6 @@ namespace lsp
             return (visible()) ? bHasFocus : false;
         }
 
-        status_t LSPWindow::set_title(const char *caption)
-        {
-            if (caption != NULL)
-            {
-                LSPString tmp;
-                tmp.set_native(caption);
-                if (tmp.equals(&sCaption))
-                    return STATUS_OK;
-
-                sCaption.swap(&tmp);
-            }
-            else if (sCaption.length() > 0)
-            {
-                sCaption.truncate();
-                caption = "";
-            }
-            else
-                return STATUS_OK;
-
-            return (pWindow != NULL) ? pWindow->set_caption(caption) : STATUS_OK;
-        }
-
-        status_t LSPWindow::set_title(const LSPString *value)
-        {
-            if (value != NULL)
-            {
-                if (sCaption.equals(value))
-                    return STATUS_OK;
-                if (!sCaption.set(value))
-                    return STATUS_NO_MEM;
-            }
-            else if (sCaption.length() > 0)
-                sCaption.truncate();
-            else
-                return STATUS_OK;
-
-            const char *caption = sCaption.get_native();
-            if (caption == NULL)
-                caption = "";
-            return (pWindow != NULL) ? pWindow->set_caption(caption) : STATUS_OK;
-        }
-
         void LSPWindow::realize(const realize_t *r)
         {
             lsp_trace("width=%d, height=%d", int(r->nWidth), int(r->nHeight));
@@ -959,17 +994,17 @@ namespace lsp
             realize_t rc;
 
             // Dimensions
-            ssize_t xs          = r->nWidth  - sPadding.horizontal();
-            ssize_t ys          = r->nHeight - sPadding.vertical();
+            ssize_t xs          = r->nWidth  - sPadding.horizontal() - nBorder * 2;
+            ssize_t ys          = r->nHeight - sPadding.vertical() - nBorder * 2;
 
             if ((sr.nMinWidth >= 0) && (sr.nMinWidth > xs))
             {
-                rc.nLeft            = sPadding.left();
+                rc.nLeft            = nBorder + sPadding.left();
                 rc.nWidth           = sr.nMinWidth;
             }
             else if (sr.nMaxWidth < 0)
             {
-                rc.nLeft            = sPadding.left();
+                rc.nLeft            = nBorder + sPadding.left();
                 rc.nWidth           = xs;
             }
             else
@@ -978,17 +1013,17 @@ namespace lsp
                 if (rc.nWidth > xs)
                     rc.nWidth           = xs;
                 xs                 -= rc.nWidth;
-                rc.nLeft            = sPadding.left() + xs * nHorPos;
+                rc.nLeft            = nBorder + sPadding.left() + xs * nHorPos;
             }
 
             if ((sr.nMinHeight >= 0) && (sr.nMinHeight > ys))
             {
-                rc.nTop             = sPadding.top();
+                rc.nTop             = nBorder + sPadding.top();
                 rc.nHeight          = sr.nMinHeight;
             }
             else if (sr.nMaxHeight < 0)
             {
-                rc.nTop             = sPadding.top();
+                rc.nTop             = nBorder + sPadding.top();
                 rc.nHeight          = ys;
             }
             else
@@ -997,7 +1032,7 @@ namespace lsp
                 if (rc.nHeight > ys)
                     rc.nHeight          = ys;
                 ys                 -= rc.nHeight;
-                rc.nTop             = sPadding.top() + ys * nVertPos;
+                rc.nTop             = nBorder + sPadding.top() + ys * nVertPos;
             }
 
             // Call for realize
@@ -1022,6 +1057,9 @@ namespace lsp
             // Estimate minimum possible window dimensions
             r->nMinWidth        = (sConstraints.nMinWidth >= 0) ? sConstraints.nMinWidth : sPadding.horizontal();
             r->nMinHeight       = (sConstraints.nMinHeight >= 0) ? sConstraints.nMinHeight : sPadding.vertical();
+
+            r->nMinWidth       += nBorder * 2;
+            r->nMinHeight      += nBorder * 2;
 
             if (pChild != NULL)
             {
@@ -1059,6 +1097,41 @@ namespace lsp
                 return STATUS_BAD_STATE;
 
             return pWindow->set_icon(bgra, width, height);
+        }
+
+        status_t LSPWindow::set_class(const char *instance, const char *wclass)
+        {
+            if (pWindow == NULL)
+                return STATUS_BAD_STATE;
+            return pWindow->set_class(instance, wclass);
+        }
+
+        status_t LSPWindow::set_class(const LSPString *instance, const LSPString *wclass)
+        {
+            if ((instance == NULL) || (wclass == NULL))
+                return STATUS_BAD_ARGUMENTS;
+            if (pWindow == NULL)
+                return STATUS_BAD_STATE;
+            char *i = instance->clone_ascii();
+            if (i == NULL)
+                return STATUS_NO_MEM;
+            const char *c = instance->get_utf8();
+
+            status_t res = (c != NULL) ? set_class(i, c) : STATUS_NO_MEM;
+            ::free(i);
+            return res;
+        }
+
+        status_t LSPWindow::set_role(const char *role)
+        {
+            if (pWindow == NULL)
+                return STATUS_BAD_STATE;
+            return pWindow->set_role(role);
+        }
+
+        status_t LSPWindow::set_role(const LSPString *role)
+        {
+            return set_role(role->get_utf8());
         }
 
     } /* namespace tk */

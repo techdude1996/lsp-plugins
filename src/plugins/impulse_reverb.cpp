@@ -21,7 +21,7 @@
 
 namespace lsp
 {
-    static float band_freqs[] =
+    static const float band_freqs[] =
     {
         73.0f,
         156.0f,
@@ -44,7 +44,7 @@ namespace lsp
         pDescr      = NULL;
     }
 
-    int impulse_reverb_base::IRLoader::run()
+    status_t impulse_reverb_base::IRLoader::run()
     {
         return pCore->load(pDescr);
     }
@@ -67,7 +67,7 @@ namespace lsp
         pCore       = NULL;
     }
 
-    int impulse_reverb_base::IRConfigurator::run()
+    status_t impulse_reverb_base::IRConfigurator::run()
     {
         return pCore->reconfigure(&sReconfig);
     }
@@ -203,6 +203,8 @@ namespace lsp
             f->pSwap        = NULL;
             f->pSwapSample  = NULL;
             f->pCurrSample  = NULL;
+
+            f->sListen.init();
 
             for (size_t j=0; j<impulse_reverb_base_metadata::TRACKS_MAX; ++j)
             {
@@ -611,14 +613,20 @@ namespace lsp
             }
 
             // Listen button pressed?
-            if (f->pListen->getValue() >= 0.5f)
+            if (f->pListen != NULL)
+                f->sListen.submit(f->pListen->getValue());
+
+            if (f->sListen.pending())
             {
+                lsp_trace("Submitted listen toggle");
                 size_t n_c = (f->pCurrSample != NULL) ? f->pCurrSample->channels() : 0;
                 if (n_c > 0)
                 {
                     for (size_t j=0; j<2; ++j)
                         vChannels[j].sPlayer.play(i, j % n_c, 1.0f, 0);
                 }
+
+                f->sListen.commit();
             }
         }
     }
@@ -798,8 +806,8 @@ namespace lsp
                 c->sDelay.process(c->vBuffer, c->vBuffer, to_do);
 
                 // Apply processed signal to output channels
-                dsp::scale_add3(vChannels[0].vBuffer, c->vBuffer, c->fPanOut[0], to_do);
-                dsp::scale_add3(vChannels[1].vBuffer, c->vBuffer, c->fPanOut[1], to_do);
+                dsp::fmadd_k3(vChannels[0].vBuffer, c->vBuffer, c->fPanOut[0], to_do);
+                dsp::fmadd_k3(vChannels[1].vBuffer, c->vBuffer, c->fPanOut[1], to_do);
             }
 
             // Now apply equalization, bypass control and players
@@ -812,7 +820,7 @@ namespace lsp
 
                 // Pass dry sound to output channels
                 if (nInputs == 1)
-                    dsp::scale_add3(c->vBuffer, vInputs[0].vIn, c->fDryPan[0], to_do);
+                    dsp::fmadd_k3(c->vBuffer, vInputs[0].vIn, c->fDryPan[0], to_do);
                 else
                     dsp::mix_add2(c->vBuffer, vInputs[0].vIn, vInputs[1].vIn, c->fDryPan[0], c->fDryPan[1], to_do);
 
@@ -1005,6 +1013,8 @@ namespace lsp
             ssize_t fsamples    = flen - head_cut - tail_cut;
             if (fsamples <= 0)
             {
+                for (size_t j=0; j<channels; ++j)
+                    dsp::fill_zero(f->vThumbs[j], impulse_reverb_base_metadata::MESH_SIZE);
                 s->setLength(0);
                 continue;
             }
@@ -1042,7 +1052,7 @@ namespace lsp
 
                 // Normalize graph if possible
                 if (f->fNorm != 1.0f)
-                    dsp::scale2(dst, f->fNorm, impulse_reverb_base_metadata::MESH_SIZE);
+                    dsp::mul_k2(dst, f->fNorm, impulse_reverb_base_metadata::MESH_SIZE);
             }
         }
 

@@ -19,7 +19,8 @@ namespace lsp
     {
         const w_class_t LSPAxis::metadata = { "LSPAxis", &LSPGraphItem::metadata };
 
-        LSPAxis::LSPAxis(LSPDisplay *dpy): LSPGraphItem(dpy)
+        LSPAxis::LSPAxis(LSPDisplay *dpy): LSPGraphItem(dpy),
+            sColor(this)
         {
             nFlags          = F_BASIS;
             fAngle          = 0.0f;
@@ -77,9 +78,12 @@ namespace lsp
                 if (!clip_line2d(la, lb, lc, cv->area_left(), cv->area_right(), cv->area_top(), cv->area_bottom(), x1, y1, x2, y2))
                     return false;
 
-                float d1    = distance2d(cx, cy, x1, y1), d2 = distance2d(cx, cy, x2, y2);
+                float d1    = distance2d(cx, cy, x1, y1);
+                float d2    = distance2d(cx, cy, x2, y2);
                 d           = (d1 > d2) ? d1 : d2;
             }
+            if (d > 1.0f)
+                d          -= 0.5f; // Fix rounding errors
 
             // Normalize value according to minimum and maximum visible values of the axis
             float a_min = fabsf(fMin), a_max = fabsf(fMax);
@@ -108,8 +112,8 @@ namespace lsp
                 norm    = d / norm;
 
                 // Apply delta-vector
-                dsp::scale_add3(x, dv, norm * fDX, count);
-                dsp::scale_add3(y, dv, norm * fDY, count);
+                dsp::fmadd_k3(x, dv, norm * fDX, count);
+                dsp::fmadd_k3(y, dv, norm * fDY, count);
             }
 
             // Saturate values
@@ -146,9 +150,12 @@ namespace lsp
                 if (!clip_line2d(la, lb, lc, cv->area_left(), cv->area_right(), cv->area_top(), cv->area_bottom(), x1, y1, x2, y2))
                     return false;
 
-                float d1    = distance2d(cx, cy, x1, y1), d2 = distance2d(cx, cy, x2, y2);
+                float d1    = distance2d(cx, cy, x1, y1);
+                float d2    = distance2d(cx, cy, x2, y2);
                 d           = (d1 > d2) ? d1 : d2;
             }
+            if (d > 1.0f)
+                d          -= 0.5f; // Fix rounding errors
 
             // Normalize value according to minimum and maximum visible values of the axis
             float a_min = fabsf(fMin), a_max = fabsf(fMax);
@@ -265,13 +272,22 @@ namespace lsp
                 return;
             fAngle      = value;
 
-            float dx    = 0.001f * truncf(cos(value) * 1000.0f);
-            float dy    = -0.001f * truncf(sin(value) * 1000.0f);
+            float dx    = 0.0001f * truncf(cosf(value) * 10000.0f);
+            float dy    = -0.0001f * truncf(sinf(value) * 10000.0f);
             if ((fDX == dx) && (fDY == dy))
                 return;
 
             fDX         = dx;
             fDY         = dy;
+            query_draw();
+        }
+
+        void LSPAxis::set_direction(float dx, float dy)
+        {
+            fDX         = dx;
+            fDY         = dy;
+            fAngle      = get_angle_2d(0.0f, 0.0f, dx, dy);
+
             query_draw();
         }
 
@@ -290,6 +306,11 @@ namespace lsp
             if (cv == NULL)
                 return;
 
+            // Prepare palette
+            Color color(sColor);
+            color.scale_lightness(brightness());
+
+            // Draw
             float cx = 0.0f, cy = 0.0f;
             cv->center(nCenter, &cx, &cy);
 
@@ -298,7 +319,7 @@ namespace lsp
                 return;
 
             bool aa = s->set_antialiasing(bSmooth);
-            s->parametric_line(la, lb, lc, cv->area_left(), cv->area_right(), cv->area_top(), cv->area_bottom(), nWidth, sColor);
+            s->parametric_line(la, lb, lc, cv->area_left(), cv->area_right(), cv->area_top(), cv->area_bottom(), nWidth, color);
             s->set_antialiasing(aa);
         }
     } /* namespace tk */

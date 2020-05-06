@@ -11,29 +11,29 @@
 
 namespace lsp
 {
-    static const int nonlinear_convolver_classes[] = {C_DISTORTION, C_SIMULATOR, -1};
+    static const int nonlinear_convolver_classes[] = { C_SIMULATOR, -1};
 
-    static const char *nc_order[] =
+    static const port_item_t nc_order[] =
     {
-        "2",
-        "3",
-        "4",
-        "6",
-        "8",
-        NULL
+        { "2", NULL },
+        { "3", NULL },
+        { "4", NULL },
+        { "6", NULL },
+        { "8", NULL },
+        { NULL, NULL }
     };
 
-    static const char *nc_windowSize[] =
+    static const port_item_t nc_windowSize[] =
     {
-        "512",
-        "1024",
-        "2048",
-        "4096",
-        "8192",
-        "16384",
-        "32768",
-        "65536",
-        NULL
+        { "512", NULL },
+        { "1024", NULL },
+        { "2048", NULL },
+        { "4096", NULL },
+        { "8192", NULL },
+        { "16384", NULL },
+        { "32768", NULL },
+        { "65536", NULL },
+        { NULL, NULL }
     };
 
     static const port_t nonlinear_convolver_ports[] =
@@ -62,8 +62,10 @@ namespace lsp
         LSP_NONLINEAR_CONVOLVER_BASE + 0,
         LSP_VERSION(1, 0, 0),
         nonlinear_convolver_classes,
+        E_NONE,
         nonlinear_convolver_ports,
         "convolution/nonlinear_convolver.xml",
+        NULL,
         mono_plugin_port_groups
     };
 }

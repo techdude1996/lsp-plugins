@@ -19,7 +19,7 @@ namespace lsp
             ssize_t                 nID;
 
         public:
-            LV2Port(const port_t *meta, LV2Extensions *ext): IPort(meta)
+            explicit LV2Port(const port_t *meta, LV2Extensions *ext): IPort(meta)
             {
                 pExt            =   ext;
                 urid            =   (meta != NULL) ? pExt->map_port(meta->id) : -1;
@@ -55,9 +55,9 @@ namespace lsp
             virtual void serialize()                    { };
 
             /** Deserialize state of the port from LV2 Atom
-             *
+             * @param flags additional flags
              */
-            virtual void deserialize(const void *data)  { };
+            virtual void deserialize(const void *data, size_t flags)  { };
 
             /** Get type of the LV2 port in terms of Atom
              *
@@ -103,13 +103,13 @@ namespace lsp
 
     class LV2PortGroup: public LV2Port
     {
-        private:
+        protected:
             float                   nCurrRow;
             size_t                  nCols;
             size_t                  nRows;
 
         public:
-            LV2PortGroup(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
+            explicit LV2PortGroup(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
             {
                 nCurrRow            = meta->start;
                 nCols               = port_list_size(meta->members);
@@ -140,7 +140,7 @@ namespace lsp
                 pExt->forge_int(nCurrRow);
             }
 
-            virtual void deserialize(const void *data)
+            virtual void deserialize(const void *data, size_t flags)
             {
                 const LV2_Atom_Int *atom = reinterpret_cast<const LV2_Atom_Int *>(data);
                 if ((atom->body >= 0) && (atom->body < int32_t(nRows)))
@@ -183,10 +183,10 @@ namespace lsp
     class LV2RawPort: public LV2Port
     {
         protected:
-            void *pBuffer;
+            void       *pBuffer;
 
         public:
-            LV2RawPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext), pBuffer(NULL) { }
+            explicit LV2RawPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext), pBuffer(NULL) { }
             virtual ~LV2RawPort() { pBuffer = NULL; };
 
         public:
@@ -200,20 +200,59 @@ namespace lsp
 
     class LV2AudioPort: public LV2RawPort
     {
+        protected:
+            float      *pSanitized;
+            float      *pFrame;
+
         public:
-            LV2AudioPort(const port_t *meta, LV2Extensions *ext) : LV2RawPort(meta, ext) { }
-            virtual ~LV2AudioPort() { };
+            explicit LV2AudioPort(const port_t *meta, LV2Extensions *ext) : LV2RawPort(meta, ext)
+            {
+                pSanitized  = NULL;
+                pFrame      = NULL;
+
+                if (IS_IN_PORT(pMetadata))
+                {
+                    size_t length = pExt->nMaxBlockLength;
+                    pSanitized = reinterpret_cast<float *>(::malloc(sizeof(float) * length));
+                    if (pSanitized != NULL)
+                        dsp::fill_zero(pSanitized, length);
+                    else
+                        lsp_warn("Failed to allocate sanitize buffer for port %s", pMetadata->id);
+                }
+            }
+
+            virtual ~LV2AudioPort()
+            {
+                if (pSanitized != NULL)
+                {
+                    ::free(pSanitized);
+                    pSanitized = NULL;
+                }
+            };
+
+            virtual void *getBuffer() { return pFrame; };
+
+            // Should be always called at least once after bind() and before processing
+            void sanitize(size_t off, size_t samples)
+            {
+                pFrame  = reinterpret_cast<float *>(pBuffer) + off;
+                if (pSanitized != NULL)
+                {
+                    dsp::sanitize2(pSanitized, reinterpret_cast<float *>(pFrame), samples);
+                    pFrame      = pSanitized;
+                }
+            }
     };
 
     class LV2InputPort: public LV2Port
     {
-        private:
+        protected:
             const float    *pData;
             float           fValue;
             float           fPrev;
 
         public:
-            LV2InputPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
+            explicit LV2InputPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
             {
                 pData       = NULL;
                 fValue      = meta->start;
@@ -280,7 +319,7 @@ namespace lsp
                     fValue      = limit_value(pMetadata, *(reinterpret_cast<const float *>(data)));
             }
 
-            virtual void deserialize(const void *data)
+            virtual void deserialize(const void *data, size_t flags)
             {
                 const LV2_Atom_Float *atom = reinterpret_cast<const LV2_Atom_Float *>(data);
                 fValue      = atom->body;
@@ -299,15 +338,60 @@ namespace lsp
             }
     };
 
+    class LV2BypassPort: public LV2InputPort
+    {
+        public:
+            explicit LV2BypassPort(const port_t *meta, LV2Extensions *ext) : LV2InputPort(meta, ext) { }
+
+            virtual ~LV2BypassPort() {}
+
+        public:
+            virtual float getValue()
+            {
+                return pMetadata->max - fValue;
+            }
+
+            virtual void setValue(float value)
+            {
+                fValue      = pMetadata->max - value;
+            }
+
+            virtual void save()
+            {
+                if (nID >= 0)
+                    return;
+                float value = pMetadata->max - fValue;
+                lsp_trace("save port id=%s, urid=%d (%s), value=%f", pMetadata->id, urid, get_uri(), value);
+                pExt->store_value(urid, pExt->forge.Float, &value, sizeof(float));
+            }
+
+            virtual void restore()
+            {
+                if (nID >= 0)
+                    return;
+                lsp_trace("restore port id=%s, urid=%d (%s)", pMetadata->id, urid, get_uri());
+                size_t count            = 0;
+                const void *data        = pExt->restore_value(urid, pExt->forge.Float, &count);
+                if ((count == sizeof(float)) && (data != NULL))
+                    fValue      = limit_value(pMetadata, pMetadata->max - *(reinterpret_cast<const float *>(data)));
+            }
+
+            virtual void deserialize(const void *data, size_t flags)
+            {
+                const LV2_Atom_Float *atom = reinterpret_cast<const LV2_Atom_Float *>(data);
+                fValue      = pMetadata->max - atom->body;
+            }
+    };
+
     class LV2OutputPort: public LV2Port
     {
-        private:
+        protected:
             float  *pData;
             float   fPrev;
             float   fValue;
 
         public:
-            LV2OutputPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
+            explicit LV2OutputPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
             {
                 pData       = NULL;
                 fPrev       = meta->start;
@@ -388,11 +472,11 @@ namespace lsp
 
     class LV2MeshPort: public LV2Port
     {
-        private:
+        protected:
             LV2Mesh                 sMesh;
 
         public:
-            LV2MeshPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
+            explicit LV2MeshPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
             {
                 sMesh.init(meta, ext);
             }
@@ -445,12 +529,12 @@ namespace lsp
 
     class LV2FrameBufferPort: public LV2Port
     {
-        private:
+        protected:
             frame_buffer_t      sFB;
             size_t              nRowID;
 
         public:
-            LV2FrameBufferPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
+            explicit LV2FrameBufferPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
             {
                 sFB.init(meta->start, meta->step);
                 nRowID = 0;
@@ -515,19 +599,21 @@ namespace lsp
 
     class LV2PathPort: public LV2Port
     {
-        private:
-            lv2_path_t      sPath;
+        protected:
+            lv2_path_t          sPath;
+            atomic_t            nLastChange;
 
-            inline void set_string(const char *string, size_t len)
+            inline void set_string(const char *string, size_t len, size_t flags)
             {
-                lsp_trace("submitting path to '%s' (length = %d)", string, int(len));
-                sPath.submit(string, len);
+                lsp_trace("submitting path to '%s' (length = %d), flags=0x%x", string, int(len), int(flags));
+                sPath.submit(string, len, flags);
             }
 
         public:
-            LV2PathPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
+            explicit LV2PathPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
             {
                 sPath.init();
+                nLastChange = sPath.nChanges;
             }
 
         public:
@@ -538,33 +624,118 @@ namespace lsp
 
             virtual void save()
             {
-                lsp_trace("save port id=%s, urid=%d (%s), value=%s", pMetadata->id, urid, get_uri(), sPath.sPath);
-                if (strlen(sPath.sPath) > 0)
-                    pExt->store_value(urid, pExt->uridPathType, sPath.sPath, strlen(sPath.sPath) + sizeof(char));
+                const char *path = sPath.sPath;
+
+                lsp_trace("save port id=%s, urid=%d (%s), value=%s", pMetadata->id, urid, get_uri(), path);
+
+                if (::strlen(path) > 0)
+                {
+                    char *mapped = NULL;
+
+                    // We need to translate absolute path to relative path?
+                    if ((pExt->mapPath != NULL) && (::strstr(path, LSP_BUILTIN_PREFIX) != path))
+                    {
+                        mapped = pExt->mapPath->abstract_path(pExt->mapPath->handle, path);
+                        if (mapped != NULL)
+                        {
+                            lsp_trace("mapped path: %s -> %s", path, mapped);
+                            path = mapped;
+                        }
+                    }
+
+                    // Store the actual value of the path
+                    pExt->store_value(urid, pExt->uridPathType, path, ::strlen(path) + sizeof(char));
+
+                    if (mapped != NULL)
+                        ::free(mapped);
+                }
+            }
+
+            void tx_request()
+            {
+                lsp_trace("tx_request");
+                atomic_add(&sPath.nChanges, 1);
             }
 
             virtual void restore()
             {
                 lsp_trace("restore port id=%s, urid=%d (%s)", pMetadata->id, urid, get_uri());
                 size_t count            = 0;
-                const char *path        = reinterpret_cast<const char *>(pExt->restore_value(urid, pExt->uridPathType, &count));
+                uint32_t type           = -1;
+
+                const char *path        = reinterpret_cast<const char *>(pExt->retrieve_value(urid, &type, &count));
+                char *mapped            = NULL;
+                if (path != NULL)
+                {
+                    if (type == pExt->forge.URID)
+                    {
+                        const LV2_URID *urid    = reinterpret_cast<const LV2_URID *>(path);
+                        path                = pExt->unmap_urid(*urid);
+                        if (path != NULL)
+                            count               = ::strnlen(path, PATH_MAX-1);
+                    }
+                    else if ((type != pExt->uridPathType) && (type != pExt->forge.String))
+                    {
+                        if (path != NULL)
+                            lsp_trace("Invalid type: %d = %s", int(type), pExt->unmap_urid(type));
+                        path                    = NULL;
+                    }
+                }
+
                 if ((path != NULL) && (count > 0))
-                    set_string(path, count);
+                {
+                    // Save path as temporary variable
+                    char tmp_path[PATH_MAX];
+                    ::strncpy(tmp_path, path, count);
+                    tmp_path[count] = '\0';
+                    path        = tmp_path;
+
+                    // We need to translate relative path to absolute path?
+                    if ((pExt->mapPath != NULL) && (::strstr(path, LSP_BUILTIN_PREFIX) != path))
+                    {
+                        mapped = pExt->mapPath->absolute_path(pExt->mapPath->handle, path);
+                        if (mapped != NULL)
+                        {
+                            lsp_trace("unmapped path: %s -> %s", path, mapped);
+                            path  = mapped;
+                            count = ::strnlen(path, PATH_MAX-1);
+                        }
+                    }
+
+                    // Restore the actual value of the path
+                    set_string(path, count, PF_STATE_IMPORT);
+                }
                 else
-                    set_string("", 0);
+                    set_string("", 0, PF_STATE_IMPORT);
+                tx_request();
+
+                if (mapped != NULL)
+                    ::free(mapped);
+            }
+
+            virtual bool tx_pending()
+            {
+                return sPath.nChanges != nLastChange;
+            }
+
+            void reset_tx_pending()
+            {
+                lsp_trace("reset_tx_pending");
+                nLastChange     = sPath.nChanges;
             }
 
             virtual void serialize()
             {
                 pExt->forge_path(sPath.get_path());
+                reset_tx_pending();
             }
 
-            virtual void deserialize(const void *data)
+            virtual void deserialize(const void *data, size_t flags)
             {
                 const LV2_Atom *atom = reinterpret_cast<const LV2_Atom *>(data);
                 if (atom->type != pExt->uridPathType)
                     return;
-                set_string(reinterpret_cast<const char *>(atom + 1), atom->size);
+                set_string(reinterpret_cast<const char *>(atom + 1), atom->size, flags);
             }
 
             virtual LV2_URID get_type_urid()    { return pExt->uridPathType; }
@@ -575,13 +746,13 @@ namespace lsp
             }
     };
 
-    class LV2MidiInputPort: public LV2RawPort
+    class LV2MidiPort: public LV2Port
     {
-        private:
+        protected:
             midi_t      sQueue;
 
         public:
-            LV2MidiInputPort(const port_t *meta, LV2Extensions *ext): LV2RawPort(meta, ext)
+            explicit LV2MidiPort(const port_t *meta, LV2Extensions *ext): LV2Port(meta, ext)
             {
                 sQueue.clear();
             }
@@ -590,214 +761,44 @@ namespace lsp
             virtual void *getBuffer()
             {
                 return &sQueue;
-            }
-
-            virtual bool pre_process(size_t samples)
-            {
-                // Clear queue
-                sQueue.clear();
-
-                // Check buffer
-                if (pBuffer == NULL)
-                    return false;
-
-                // Get atom sequence
-                const LV2_Atom_Sequence *seq = reinterpret_cast<const LV2_Atom_Sequence *>(pBuffer);
-
-                for (
-                    const LV2_Atom_Event* ev = lv2_atom_sequence_begin(&seq->body);
-                    !lv2_atom_sequence_is_end(&seq->body, seq->atom.size, ev);
-                    ev = lv2_atom_sequence_next(ev)
-                )
-                {
-                    // Validate that it is a MIDI event
-                    if (ev->body.type != pExt->uridMidiEventType)
-                    {
-                        lsp_trace("Invalid event type: %d (%s)", ev->body.type, pExt->unmap_urid(ev->body.type));
-                        continue;
-                    }
-
-                    // Decode MIDI event
-                    midi_event_t me;
-                    const uint8_t *bytes        = reinterpret_cast<const uint8_t*>(ev + 1);
-                    if (!decode_midi_message(&me, bytes))
-                        return false;
-
-                    // Put the event to the queue
-                    me.timestamp      = uint32_t(ev->time.frames);
-
-                    // Debug
-                    #ifdef LSP_TRACE
-                        #define TRACE_KEY(x)    case MIDI_MSG_ ## x: evt_type = #x; break;
-                        lsp_trace("midi dump: %02x %02x %02x", int(bytes[0]), int(bytes[1]), int(bytes[2]));
-
-                        char tmp_evt_type[32];
-                        const char *evt_type = NULL;
-                        switch (me.type)
-                        {
-                            TRACE_KEY(NOTE_OFF)
-                            TRACE_KEY(NOTE_ON)
-                            TRACE_KEY(NOTE_PRESSURE)
-                            TRACE_KEY(NOTE_CONTROLLER)
-                            TRACE_KEY(PROGRAM_CHANGE)
-                            TRACE_KEY(CHANNEL_PRESSURE)
-                            TRACE_KEY(PITCH_BEND)
-                            TRACE_KEY(SYSTEM_EXCLUSIVE)
-                            TRACE_KEY(MTC_QUARTER)
-                            TRACE_KEY(SONG_POS)
-                            TRACE_KEY(SONG_SELECT)
-                            TRACE_KEY(TUNE_REQUEST)
-                            TRACE_KEY(END_EXCLUSIVE)
-                            TRACE_KEY(CLOCK)
-                            TRACE_KEY(START)
-                            TRACE_KEY(CONTINUE)
-                            TRACE_KEY(STOP)
-                            TRACE_KEY(ACTIVE_SENSING)
-                            TRACE_KEY(RESET)
-                            default:
-                                snprintf(tmp_evt_type, sizeof(tmp_evt_type), "UNKNOWN(0x%02x)", int(me.type));
-                                evt_type = tmp_evt_type;
-                                break;
-                        }
-
-                        lsp_trace("MIDI Event: type=%s, timestamp=%ld", evt_type, (long)(me.timestamp));
-
-                        #undef TRACE_KEY
-
-                    #endif /* LSP_TRACE */
-
-                    // Add event to the queue
-                    if (!sQueue.push(me))
-                        lsp_error("MIDI event queue overflow");
-                }
-
-                return false;
-            }
-
-            virtual void post_process(size_t samples)
-            {
-                sQueue.clear();
             }
     };
 
-    class LV2MidiOutputPort: public LV2RawPort
+    class LV2OscPort: public LV2Port
     {
-        private:
-            midi_t      sQueue;
-
-            #pragma pack(push, 1)
-            typedef struct LV2_Atom_Midi
-            {
-                LV2_Atom    atom;
-                uint8_t     body[8];
-            } LV2_Atom_Midi;
-            #pragma pack(pop)
+        protected:
+            osc_buffer_t     *pFB;
 
         public:
-            LV2MidiOutputPort(const port_t *meta, LV2Extensions *ext): LV2RawPort(meta, ext)
+            explicit LV2OscPort(const port_t *meta, LV2Extensions *ext) : LV2Port(meta, ext)
             {
-                sQueue.clear();
+                pFB     = NULL;
+            }
+
+            virtual ~LV2OscPort()
+            {
             }
 
         public:
             virtual void *getBuffer()
             {
-                return &sQueue;
+                return pFB;
             }
 
-            virtual bool pre_process(size_t samples)
+            virtual int init()
             {
-                sQueue.clear();
-                return false;
+                pFB = osc_buffer_t::create(OSC_BUFFER_MAX);
+                return (pFB == NULL) ? STATUS_NO_MEM : STATUS_OK;
             }
 
-            virtual void post_process(size_t samples)
+            virtual void destroy()
             {
-//                lsp_trace("buffer=%p", pBuffer);
-                // Check that buffer is present
-                if (pBuffer == NULL)
-                    return;
-
-                // Initialize forge
-                LV2_Atom_Sequence *sequence     = reinterpret_cast<LV2_Atom_Sequence *>(pBuffer);
-                pExt->forge_set_buffer(sequence, sequence->atom.size);
-                LV2_Atom_Forge_Frame    seq;
-                pExt->forge_sequence_head(&seq, 0);
-
-                // Serialize MIDI events
-                LV2_Atom_Midi buf;
-                buf.atom.type       = pExt->uridMidiEventType;
-
-                for (size_t i=0; i<sQueue.nEvents; ++i)
+                if (pFB != NULL)
                 {
-                    const midi_event_t *me = &sQueue.vEvents[i];
-
-                    // Debug
-                    #ifdef LSP_TRACE
-                        #define TRACE_KEY(x)    case MIDI_MSG_ ## x: evt_type = #x; break;
-
-                        char tmp_evt_type[32];
-                        const char *evt_type = NULL;
-                        switch (me->type)
-                        {
-                            TRACE_KEY(NOTE_OFF)
-                            TRACE_KEY(NOTE_ON)
-                            TRACE_KEY(NOTE_PRESSURE)
-                            TRACE_KEY(NOTE_CONTROLLER)
-                            TRACE_KEY(PROGRAM_CHANGE)
-                            TRACE_KEY(CHANNEL_PRESSURE)
-                            TRACE_KEY(PITCH_BEND)
-                            TRACE_KEY(SYSTEM_EXCLUSIVE)
-                            TRACE_KEY(MTC_QUARTER)
-                            TRACE_KEY(SONG_POS)
-                            TRACE_KEY(SONG_SELECT)
-                            TRACE_KEY(TUNE_REQUEST)
-                            TRACE_KEY(END_EXCLUSIVE)
-                            TRACE_KEY(CLOCK)
-                            TRACE_KEY(START)
-                            TRACE_KEY(CONTINUE)
-                            TRACE_KEY(STOP)
-                            TRACE_KEY(ACTIVE_SENSING)
-                            TRACE_KEY(RESET)
-                            default:
-                                snprintf(tmp_evt_type, sizeof(tmp_evt_type), "UNKNOWN(0x%02x)", int(me->type));
-                                evt_type = tmp_evt_type;
-                                break;
-                        }
-
-                        lsp_trace("MIDI Event: type=%s, timestamp=%ld", evt_type, (long)(me->timestamp));
-
-                        #undef TRACE_KEY
-
-                    #endif /* LSP_TRACE */
-
-                    buf.atom.size = encode_midi_message(me, buf.body);
-                    if (!buf.atom.size)
-                    {
-                        lsp_error("Tried to serialize invalid MIDI event");
-                        continue;
-                    }
-
-                    lsp_trace("midi dump: %02x %02x %02x (%d: %d)",
-                        int(buf.body[0]), int(buf.body[1]), int(buf.body[2]), int(buf.atom.size), int(buf.atom.size + sizeof(LV2_Atom)));
-
-                    // Serialize object
-                    pExt->forge_frame_time(me->timestamp);
-                    pExt->forge_raw(&buf.atom, sizeof(LV2_Atom) + buf.atom.size);
-                    pExt->forge_pad(buf.atom.size);
+                    osc_buffer_t::destroy(pFB);
+                    pFB     = NULL;
                 }
-
-                // Cleanup queue
-                sQueue.clear();
-
-                // Complete sequence
-                pExt->forge_pop(&seq);
             }
-
-            virtual bool pending()
-            {
-                return sQueue.nEvents > 0;
-            };
     };
 
 }

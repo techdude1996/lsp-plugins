@@ -6,16 +6,20 @@
  */
 
 #include <ui/ctl/ctl.h>
+#include <stdio.h>
 
 #define METER_ATT       0.1f
-#define METER_REL       0.5f
+#define METER_REL       0.25f
 
 namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlMeter::metadata = { "CtlMeter", &CtlWidget::metadata };
+
         CtlMeter::CtlMeter(CtlRegistry *src, LSPMeter *widget): CtlWidget(src, widget)
         {
+            pClass          = &metadata;
             pPort[0]        = NULL;
             pPort[1]        = NULL;
             nFlags          = 0;
@@ -75,6 +79,8 @@ namespace lsp
 
         void CtlMeter::init()
         {
+            CtlWidget::init();
+
             sActivity[0].init(pRegistry, this);
             sActivity[1].init(pRegistry, this);
 
@@ -225,8 +231,8 @@ namespace lsp
                     continue;
 
                 char *str = NULL;
-                asprintf(&str, ":%s >= 0.5", pActivityID[i]);
-                if (str != NULL)
+                int n = asprintf(&str, ":%s >= 0.5", pActivityID[i]);
+                if ((n >= 0) && (str != NULL))
                 {
                     sActivity[i].parse(str);
                     free(str);
@@ -248,7 +254,7 @@ namespace lsp
                 float min, max, balance;
 
                 // Calculate minimum
-                if (nFlags & MF_MIN)
+                if ((p != NULL) && (nFlags & MF_MIN))
                     min = calc_value(p, fMin);
                 else if ((p != NULL) && (p->flags & F_LOWER))
                     min = calc_value(p, p->min);
@@ -257,7 +263,7 @@ namespace lsp
                 mtr->set_mtr_min(i, min);
 
                 // Calculate maximum
-                if (nFlags & MF_MAX)
+                if ((p != NULL) && (nFlags & MF_MAX))
                     max = calc_value(p, fMax);
                 else if ((p != NULL) && (p->flags & F_UPPER))
                     max = calc_value(p, p->max);
@@ -384,13 +390,16 @@ namespace lsp
 
                 // Update meter
                 const port_t *p = (pPort[i] != NULL) ? pPort[i]->metadata() : NULL;
-                if (nType == MT_RMS_PEAK)
+                if (p != NULL)
                 {
-                    mtr->set_mtr_peak(i, calc_value(p, fValue[i]));
-                    set_meter_text(p, mtr, i, fRms[i]);
+                    if (nType == MT_RMS_PEAK)
+                    {
+                        mtr->set_mtr_peak(i, calc_value(p, fValue[i]));
+                        set_meter_text(p, mtr, i, fRms[i]);
+                    }
+                    else
+                        set_meter_text(p, mtr, i, fValue[i]);
                 }
-                else
-                    set_meter_text(p, mtr, i, fValue[i]);
             }
         }
 
@@ -421,7 +430,9 @@ namespace lsp
             // Now we are able to format values
             char buf[40];
 
-            if (avalue < 10.0f)
+            if (isnan(avalue))
+                strcpy(buf, "nan");
+            else if (avalue < 10.0f)
                 snprintf(buf, sizeof(buf), "%.2f", value);
             else if (avalue < 100.0f)
                 snprintf(buf, sizeof(buf), "%.1f", value);

@@ -8,6 +8,7 @@
 #ifndef CONTAINER_LV2_UI_PORTS_H_
 #define CONTAINER_LV2_UI_PORTS_H_
 
+#include <core/resource.h>
 
 namespace lsp
 {
@@ -42,7 +43,7 @@ namespace lsp
 
     class LV2UIPortGroup: public LV2UIPort
     {
-        private:
+        protected:
             size_t      nRows;
             size_t      nCols;
             size_t      nCurrRow;
@@ -198,6 +199,59 @@ namespace lsp
             }
     };
 
+    class LV2UIBypassPort: public LV2UIFloatPort
+    {
+        public:
+            explicit LV2UIBypassPort(const port_t *meta, LV2Extensions *ext, LV2Port *port) :
+                LV2UIFloatPort(meta, ext, port)
+            {
+            }
+
+            virtual ~LV2UIBypassPort() { };
+
+        public:
+            virtual void set_value(float value)
+            {
+                fValue      = limit_value(pMetadata, value);
+                if (nID >= 0)
+                {
+                    // Use standard mechanism to access port
+                    float value = pMetadata->max - fValue;
+                    lsp_trace("write(%d, %d, %d, %f)", int(nID), int(sizeof(float)), int(0), value);
+                    pExt->write_data(nID, sizeof(float), 0, &value);
+                }
+                else
+                {
+                    if (pPort != NULL)
+                    {
+                        lsp_trace("Directly writing float port id=%s, value=%f",
+                            pPort->metadata()->id, fValue);
+                        pPort->setValue(fValue);
+                    }
+                    else if (urid > 0)
+                        pExt->ui_write_state(this);
+                }
+            }
+
+            virtual void serialize()
+            {
+                pExt->forge_float(pMetadata->max - fValue);
+            };
+
+            virtual void deserialize(const void *data)
+            {
+                const LV2_Atom_Float *atom = reinterpret_cast<const LV2_Atom_Float *>(data);
+                fValue      = limit_value(pMetadata, pMetadata->max - atom->body);
+            }
+
+            virtual void notify(const void *buffer, size_t protocol, size_t size)
+            {
+                if (size == sizeof(float))
+                    fValue = limit_value(pMetadata, pMetadata->max - *(reinterpret_cast<const float *>(buffer)));
+                lsp_trace("set value of port %s = %f", pMetadata->id, fValue);
+            }
+    };
+
     class LV2UIPeakPort: public LV2UIFloatPort
     {
         public:
@@ -214,7 +268,7 @@ namespace lsp
                     return;
                 }
                 LV2UIFloatPort::notify(buffer, protocol, size);
-                lsp_trace("id=%s, value=%f", pMetadata->id, fValue);
+//                lsp_trace("id=%s, value=%f", pMetadata->id, fValue);
             }
     };
 
@@ -521,14 +575,12 @@ namespace lsp
     {
         protected:
             LV2PathPort    *pPort;
-            bool            bForce;
             char            sPath[PATH_MAX];
 
         public:
             explicit LV2UIPathPort(const port_t *meta, LV2Extensions *ext, LV2Port *xport) :  LV2UIPort(meta, ext)
             {
                 sPath[0]    = '\0';
-                bForce      = false;
                 pPort       = NULL;
 
                 lsp_trace("id=%s, ext=%p, xport=%p", meta->id, ext, xport);
@@ -538,8 +590,7 @@ namespace lsp
                 if ((xmeta != NULL) && (xmeta->role == R_PATH))
                 {
                     pPort               = static_cast<LV2PathPort *>(xport);
-                    bForce              = true;
-
+                    pPort->tx_request();
                     lsp_trace("Connected direct path port id=%s", xmeta->id);
                 }
             }
@@ -554,7 +605,7 @@ namespace lsp
                 if ((str != NULL) && (len > 0))
                 {
                     size_t copy     = (len >= PATH_MAX) ? PATH_MAX-1 : len;
-                    memcpy(sPath, str, len);
+                    ::memcpy(sPath, str, len);
                     sPath[copy]     = '\0';
                 }
                 else
@@ -567,16 +618,42 @@ namespace lsp
                 // Read path value
                 const LV2_Atom *atom = reinterpret_cast<const LV2_Atom *>(data);
                 set_string(reinterpret_cast<const char *>(atom + 1), atom->size);
+
+                lsp_trace("mapPath = %p, path = %s", pExt->mapPath, sPath);
+                if ((pExt->mapPath != NULL) && (::strstr(sPath, LSP_BUILTIN_PREFIX) != sPath))
+                {
+                    char *unmapped_path = pExt->mapPath->absolute_path(pExt->mapPath->handle, sPath);
+                    if (unmapped_path != NULL)
+                    {
+                        lsp_trace("unmapped path: %s -> %s", sPath, unmapped_path);
+                        set_string(unmapped_path, ::strlen(unmapped_path));
+                        ::free(unmapped_path);
+                    }
+                }
             }
 
             virtual LV2_URID        get_type_urid() const   { return pExt->uridPathType; };
 
             virtual void serialize()
             {
-                pExt->forge_path(sPath);
+                lsp_trace("mapPath = %p, path = %s", pExt->mapPath, sPath);
+                if ((pExt->mapPath != NULL) && (::strstr(sPath, LSP_BUILTIN_PREFIX) != sPath))
+                {
+                    char* mapped_path = pExt->mapPath->abstract_path(pExt->mapPath->handle, sPath);
+                    if (mapped_path != NULL)
+                    {
+                        lsp_trace("mapped path: %s -> %s", sPath, mapped_path);
+                        pExt->forge_path(mapped_path);
+                        ::free(mapped_path);
+                    }
+                    else
+                        pExt->forge_path(sPath);
+                }
+                else
+                    pExt->forge_path(sPath);
             }
 
-            virtual void write(const void* buffer, size_t size)
+            virtual void write(const void* buffer, size_t size, size_t flags)
             {
                 set_string(reinterpret_cast<const char *>(buffer), size);
 
@@ -586,29 +663,34 @@ namespace lsp
                 {
                     lsp_trace("Directly writing path port id=%s, path=%s (%d)",
                             pPort->metadata()->id, static_cast<const char *>(buffer), int(size));
-                    path->submit(static_cast<const char *>(buffer), size);
+                    path->submit(static_cast<const char *>(buffer), size, flags);
                     return;
                 }
 
                 // Write data using atom port
-                if (nID >= 0)
+                if ((nID >= 0) && (flags == 0))
                     pExt->ui_write_patch(this);
                 else
-                    pExt->ui_write_state(this);
+                    pExt->ui_write_state(this, flags);
+            }
+
+            virtual void write(const void* buffer, size_t size)
+            {
+                write(buffer, size, 0);
             }
 
             virtual bool sync()
             {
-                if (!bForce)
+                if (!pPort->tx_pending())
                     return false;
-                bForce      = false;
+                pPort->reset_tx_pending();
 
                 path_t *path        = static_cast<path_t *>(pPort->getBuffer());
-                strncpy(sPath, path->get_path(), PATH_MAX); // Copy current contents
+                ::strncpy(sPath, path->get_path(), PATH_MAX); // Copy current contents
                 sPath[PATH_MAX-1]   = '\0';
 
-//                lsp_trace("Directly received path port id=%s, path=%s",
-//                        pPort->metadata()->id, sPath);
+                lsp_trace("Directly received path port id=%s, path=%s",
+                        pPort->metadata()->id, sPath);
 
                 return true;
             }

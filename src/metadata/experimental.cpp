@@ -17,36 +17,165 @@ namespace lsp
     #define TEST_EQ_BAND(id) \
         LOG_CONTROL("g_" #id, "Band gain " #id, U_GAIN_AMP, test_plugin_metadata::BAND_GAIN)
 
-    static const char *filter_select_32ms[] =
+    static const port_item_t filter_select_32ms[] =
     {
-        "Mid 0-7",
-        "Side 0-7",
-        "Mid 8-15",
-        "Side 8-15",
-        "Mid 16-23",
-        "Side 16-23",
-        "Mid 24-31",
-        "Side 24-31",
-        NULL
+        { "Mid 0-7", NULL },
+        { "Side 0-7", NULL },
+        { "Mid 8-15", NULL },
+        { "Side 8-15", NULL },
+        { "Mid 16-23", NULL },
+        { "Side 16-23", NULL },
+        { "Mid 24-31", NULL },
+        { "Side 24-31", NULL },
+        { NULL, NULL }
     };
 
-    static const char *band_selectors[] =
+    static const port_item_t band_selectors[] =
     {
-        "0", "1", "2", "3",
-        "4", "5", "6", "7",
-        "8", "9", "10", "11",
-        "12", "13", "14", "15",
-        NULL
+        { "0", NULL },
+        { "1", NULL },
+        { "2", NULL },
+        { "3", NULL },
+        { "4", NULL },
+        { "5", NULL },
+        { "6", NULL },
+        { "7", NULL },
+        { "8", NULL },
+        { "9", NULL },
+        { "10", NULL },
+        { "11", NULL },
+        { "12", NULL },
+        { "13", NULL },
+        { "14", NULL },
+        { "15", NULL },
+        { NULL, NULL }
     };
 
-    static const char *fb_modes[] =
+    static const port_item_t fb_modes[] =
     {
-        "Rainbow",
-        "Fog",
-        "Color",
-        "Lightness",
-        "Lightness2",
-        NULL
+        { "Rainbow", NULL },
+        { "Fog", NULL },
+        { "Color", NULL },
+        { "Lightness", NULL },
+        { "Lightness2", NULL },
+        { NULL, NULL }
+    };
+
+    #define FT(x) { #x, NULL }
+
+    static const port_item_t filter_types[] =
+    {
+        FT(FLT_NONE),
+
+        FT(FLT_BT_AMPLIFIER),
+        FT(FLT_MT_AMPLIFIER),
+
+        FT(FLT_BT_RLC_LOPASS),
+        FT(FLT_MT_RLC_LOPASS),
+        FT(FLT_BT_RLC_HIPASS),
+        FT(FLT_MT_RLC_HIPASS),
+        FT(FLT_BT_RLC_LOSHELF),
+        FT(FLT_MT_RLC_LOSHELF),
+        FT(FLT_BT_RLC_HISHELF),
+        FT(FLT_MT_RLC_HISHELF),
+        FT(FLT_BT_RLC_BELL),
+        FT(FLT_MT_RLC_BELL),
+        FT(FLT_BT_RLC_RESONANCE),
+        FT(FLT_MT_RLC_RESONANCE),
+        FT(FLT_BT_RLC_NOTCH),
+        FT(FLT_MT_RLC_NOTCH),
+        FT(FLT_BT_RLC_ALLPASS),
+        FT(FLT_MT_RLC_ALLPASS),
+        FT(FLT_BT_RLC_ALLPASS2),
+        FT(FLT_MT_RLC_ALLPASS2),
+        FT(FLT_BT_RLC_LADDERPASS),
+        FT(FLT_MT_RLC_LADDERPASS),
+        FT(FLT_BT_RLC_LADDERREJ),
+        FT(FLT_MT_RLC_LADDERREJ),
+        FT(FLT_BT_RLC_BANDPASS),
+        FT(FLT_MT_RLC_BANDPASS),
+        FT(FLT_BT_RLC_ENVELOPE),
+        FT(FLT_MT_RLC_ENVELOPE),
+
+        FT(FLT_BT_BWC_LOPASS),
+        FT(FLT_MT_BWC_LOPASS),
+        FT(FLT_BT_BWC_HIPASS),
+        FT(FLT_MT_BWC_HIPASS),
+        FT(FLT_BT_BWC_LOSHELF),
+        FT(FLT_MT_BWC_LOSHELF),
+        FT(FLT_BT_BWC_HISHELF),
+        FT(FLT_MT_BWC_HISHELF),
+        FT(FLT_BT_BWC_BELL),
+        FT(FLT_MT_BWC_BELL),
+        FT(FLT_BT_BWC_LADDERPASS),
+        FT(FLT_MT_BWC_LADDERPASS),
+        FT(FLT_BT_BWC_LADDERREJ),
+        FT(FLT_MT_BWC_LADDERREJ),
+        FT(FLT_BT_BWC_BANDPASS),
+        FT(FLT_MT_BWC_BANDPASS),
+        FT(FLT_BT_BWC_ALLPASS),
+        FT(FLT_MT_BWC_ALLPASS),
+
+        FT(FLT_BT_LRX_LOPASS),
+        FT(FLT_MT_LRX_LOPASS),
+        FT(FLT_BT_LRX_HIPASS),
+        FT(FLT_MT_LRX_HIPASS),
+        FT(FLT_BT_LRX_LOSHELF),
+        FT(FLT_MT_LRX_LOSHELF),
+        FT(FLT_BT_LRX_HISHELF),
+        FT(FLT_MT_LRX_HISHELF),
+        FT(FLT_BT_LRX_BELL),
+        FT(FLT_MT_LRX_BELL),
+        FT(FLT_BT_LRX_LADDERPASS),
+        FT(FLT_MT_LRX_LADDERPASS),
+        FT(FLT_BT_LRX_LADDERREJ),
+        FT(FLT_MT_LRX_LADDERREJ),
+        FT(FLT_BT_LRX_BANDPASS),
+        FT(FLT_MT_LRX_BANDPASS),
+        FT(FLT_BT_LRX_ALLPASS),
+        FT(FLT_MT_LRX_ALLPASS),
+
+        FT(FLT_DR_APO_LOPASS),
+        FT(FLT_DR_APO_HIPASS),
+        FT(FLT_DR_APO_BANDPASS),
+        FT(FLT_DR_APO_NOTCH),
+        FT(FLT_DR_APO_ALLPASS),
+        FT(FLT_DR_APO_ALLPASS2),
+        FT(FLT_DR_APO_PEAKING),
+        FT(FLT_DR_APO_LOSHELF),
+        FT(FLT_DR_APO_HISHELF),
+        FT(FLT_DR_APO_LADDERPASS),
+        FT(FLT_DR_APO_LADDERREJ),
+
+        { NULL, NULL }
+    };
+
+    static const port_item_t filter_slopes[] =
+    {
+        { "x1", NULL },
+        { "x2", NULL },
+        { "x3", NULL },
+        { "x4", NULL },
+        { "x5", NULL },
+        { "x6", NULL },
+        { "x7", NULL },
+        { "x8", NULL },
+        { NULL, NULL }
+    };
+
+    static const port_item_t filter_ops[] =
+    {
+        { "none", NULL },
+        { "add", NULL },
+        { "sub", NULL },
+        { NULL, NULL }
+    };
+
+    static const port_item_t filter_graphs[] =
+    {
+        { "Amplitude", NULL },
+        { "Phase", NULL },
+        { NULL, NULL }
     };
 
     static const port_t test_ports[] =
@@ -57,8 +186,8 @@ namespace lsp
         FBUFFER("fb0", "Frame buffer 0", 64, test_plugin_metadata::FRM_BUFFER_SIZE),
         COMBO("fbm0", "Frame buffer mode 0", 0, fb_modes),
         COMBO("fbm1", "Frame buffer mode 1", 0, fb_modes),
-        KNOB("fbh0", "Frame buffer hue 0", U_NONE, 0.0f, 1.0f, 0.0f, 1.0f/360.0f ),
-        KNOB("fbh1", "Frame buffer hue 1", U_NONE, 0.0f, 1.0f, 1.0f/3.0f, 1.0f/360.0f ),
+        CKNOB("fbh0", "Frame buffer hue 0", U_NONE, 0.0f, 1.0f, 0.0f, 1.0f/360.0f ),
+        CKNOB("fbh1", "Frame buffer hue 1", U_NONE, 0.0f, 1.0f, 1.0f/3.0f, 1.0f/360.0f ),
 
         PATH("ifn", "File name"),
         CONTROL("ihc", "Head cut", U_MSEC, test_plugin_metadata::FILE_LENGTH),
@@ -115,6 +244,25 @@ namespace lsp
         PORTS_END
     };
 
+    #define FLT_MONO_PORTS(id) \
+        COMBO("ft" id, "Filter type " id, 0, filter_types), \
+        COMBO("s" id, "Filter slope " id, 0, filter_slopes), \
+        COMBO("op" id, "Filter operation " id, 0, filter_ops), \
+        LOG_CONTROL_DFL("fl" id, "Low frequency " id, U_HZ, filter_analyzer_metadata::FREQ, filter_analyzer_metadata::FREQ_DFL), \
+        LOG_CONTROL_DFL("fh" id, "High frequency " id, U_HZ, filter_analyzer_metadata::FREQ, filter_analyzer_metadata::FREQ_DFL * 10), \
+        LOG_CONTROL("g" id, "Gain " id, U_GAIN_AMP, filter_analyzer_metadata::GAIN), \
+        CONTROL("q" id, "Quality factor " id, U_NONE, filter_analyzer_metadata::QUALITY)
+
+    static const port_t filter_analyzer_ports[] =
+    {
+        PORTS_MONO_PLUGIN,
+        COMBO("area", "Filter graph", 0, filter_graphs),
+        MESH("fg", "Filter graph", 3, filter_analyzer_metadata::MESH_POINTS),
+        FLT_MONO_PORTS("0"),
+        FLT_MONO_PORTS("1"),
+        PORTS_END
+    };
+
     const plugin_metadata_t test_plugin_metadata::metadata =
     {
         "TEST",
@@ -123,12 +271,32 @@ namespace lsp
         &developers::v_sadovnikov,
         "test_plugin",
         "TEST",
-        LSP_LADSPA_BASE + 1001,
+        LSP_LADSPA_BASE + 4001,
         LSP_VERSION(1, 0, 0),
         test_classes,
+        E_INLINE_DISPLAY,
         test_ports,
         "experimental/test_plugin.xml",
+        NULL,
         stereo_plugin_port_groups
+    };
+
+    const plugin_metadata_t filter_analyzer_metadata::metadata =
+    {
+        "Filter analyzer",
+        "Filter analyzer",
+        "FA2",
+        &developers::v_sadovnikov,
+        "filter_analyzer",
+        "xFA2",
+        LSP_LADSPA_BASE + 4002,
+        LSP_VERSION(1, 0, 0),
+        test_classes,
+        E_NONE,
+        filter_analyzer_ports,
+        "experimental/filter_analyzer.xml",
+        NULL,
+        mono_plugin_port_groups
     };
 #endif /* LSP_NO_EXPERMIENTAL */
 

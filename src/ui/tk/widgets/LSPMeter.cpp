@@ -13,9 +13,42 @@ namespace lsp
     {
         const w_class_t LSPMeter::metadata = { "LSPMeter", &LSPWidget::metadata };
 
+        LSPMeter::channel_t::channel_t(LSPWidget *widget):
+            sColor(widget),
+            sYellow(widget),
+            sRed(widget),
+            sBalance(widget)
+        {
+            fMin         = 0.0f;
+            fMax         = 1.0f;
+            fBalance     = 0.5f;
+            fPeak        = 0.0f;
+            fValue       = 0.0f;
+            fRedZone     = 4.0f/6.0f;
+            fYellowZone  = 3.0f/6.0f;
+            fDarkZone[0] = 0.0f;
+            fDarkZone[1] = 0.0f;
+            fDarkZone[2] = 0.0f;
+            sText        = NULL;
+            nFlags       = 0;
+            fDark[0]     = 0.0f;
+            fDark[1]     = 0.0f;
+            fDark[2]     = 0.0f;
+        }
+
+        LSPMeter::channel_t::~channel_t()
+        {
+            if (sText != NULL)
+            {
+                ::free(sText);
+                sText    = NULL;
+            }
+        }
+
         LSPMeter::LSPMeter(LSPDisplay *dpy):
             LSPWidget(dpy),
-            sFont(dpy, this)
+            sIndColor(this),
+            sFont(this)
         {
             nAngle      = 0;
             nMWidth     = 20;
@@ -40,16 +73,7 @@ namespace lsp
             if (result != STATUS_OK)
                 return result;
 
-            if (pDisplay != NULL)
-            {
-                LSPTheme *theme = pDisplay->theme();
-
-                if (theme != NULL)
-                {
-                    theme->get_color(C_GLASS, &sIndColor);
-                    theme->get_color(C_BACKGROUND, &sBgColor);
-                }
-            }
+            init_color(C_GLASS, &sIndColor);
 
             sFont.init();
             sFont.set_size(9);
@@ -70,63 +94,16 @@ namespace lsp
 
             for (size_t i=0; i<nChannels; ++i)
             {
-                destroy_channel(vChannels[i]);
-                vChannels[i] = NULL;
+                if (vChannels[i] != NULL)
+                {
+                    delete vChannels[i];
+                    vChannels[i] = NULL;
+                }
             }
             nChannels = 0;
 
             delete [] vChannels;
             vChannels = NULL;
-        }
-
-        LSPMeter::channel_t *LSPMeter::create_channel()
-        {
-            if (pDisplay == NULL)
-                return NULL;
-            LSPTheme *theme = pDisplay->theme();
-            if (theme == NULL)
-                return NULL;
-
-            channel_t *c    = new channel_t;
-            if (c == NULL)
-                return NULL;
-
-            c->fMin         = 0.0f;
-            c->fMax         = 1.0f;
-            c->fBalance     = 0.5f;
-            c->fPeak        = 0.0f;
-            c->fValue       = 0.0f;
-            c->fRedZone     = 4.0f/6.0f;
-            c->fYellowZone  = 3.0f/6.0f;
-            c->fDarkZone[0] = 0.0f;
-            c->fDarkZone[1] = 0.0f;
-            c->fDarkZone[2] = 0.0f;
-            c->sText        = NULL;
-            c->nFlags       = 0;
-            c->fDark[0]     = 0.0f;
-            c->fDark[1]     = 0.0f;
-            c->fDark[2]     = 0.0f;
-
-            theme->get_color(C_GREEN, &c->sColor);
-            theme->get_color(C_YELLOW, &c->sYellow);
-            theme->get_color(C_RED, &c->sRed);
-            theme->get_color(C_YELLOW, &c->sBalance);
-
-            return c;
-        }
-
-        void LSPMeter::destroy_channel(channel_t *c)
-        {
-            if (c == NULL)
-                return;
-
-            if (c->sText != NULL)
-            {
-                free(c->sText);
-                c->sText    = NULL;
-            }
-
-            delete c;
         }
 
         status_t LSPMeter::set_mtr_min(size_t i, float value)
@@ -336,14 +313,20 @@ namespace lsp
                 // List is growing
                 for (size_t i=nChannels; i<channels; ++i)
                 {
-                    channel_t *c = create_channel();
+                    channel_t *c = new channel_t(this);
                     if (c == NULL)
                     {
                         for (size_t j=nChannels; j<i; ++i)
-                            destroy_channel(nc[j]);
+                            delete nc[j];
                         delete [] nc;
                         return STATUS_NO_MEM;
                     }
+
+                    init_color(C_GREEN, &c->sColor);
+                    init_color(C_YELLOW, &c->sYellow);
+                    init_color(C_RED, &c->sRed);
+                    init_color(C_YELLOW, &c->sBalance);
+
                     nc[i]   = c;
                 }
             }
@@ -351,7 +334,7 @@ namespace lsp
             {
                 // List is lowering
                 for (size_t i=channels; i<nChannels; ++i)
-                    destroy_channel(vChannels[i]);
+                    delete vChannels[i];
             }
 
             // Drop previous pointer to channels and replace by new
@@ -479,30 +462,39 @@ namespace lsp
 
             r->nMinWidth    = width;
             r->nMinHeight   = height;
-            r->nMaxWidth    = width;
-            r->nMaxHeight   = height;
+            r->nMaxWidth    = -1;
+            r->nMaxHeight   = -1;
         }
 
         void LSPMeter::draw_meter(ISurface *s, channel_t *c, float x, float y, ssize_t dx, ssize_t dy, float wx, float wy, size_t n)
         {
-            float delta         = (c->fMax - c->fMin) / float(n);
+            float dist          = c->fMax - c->fMin;
+            dist               += (dist > 0.0f) ? 1e-4 : -1e-4; // Error correction delta
+            float delta         = dist / float(n);
             Color cl;
 
             float vmin          = c->fMin;
+            float bright        = brightness();
+
+//            if (c->nFlags & MF_BALANCE)
+//                lsp_trace("fmin=%f, fmax=%f, delta=%f, n=%d", c->fMin, c->fMax, delta, int(n));
 
             for (size_t i=0; i<n; ++i)
             {
-                float vmax          = c->fMin + (i+1) * delta;
+                float vmax          = vmin + delta;
+
+//                if (c->nFlags & MF_BALANCE)
+//                    lsp_trace("  vmin=%f, vmax=%f, fbalance=%f", vmin, vmax, c->fBalance);
 
                 // Determine what color to use for this segment
                 if ((c->nFlags & MF_BALANCE) && (c->fBalance >= vmin) && (c->fBalance < vmax))
-                    cl.copy(c->sBalance);
+                    cl.copy(c->sBalance.color());
                 else if ((c->nFlags & MF_RED) && (c->fRedZone <= vmin))
-                    cl.copy(c->sRed);
+                    cl.copy(c->sRed.color());
                 else if ((c->nFlags & MF_YELLOW) && (c->fYellowZone <= vmin))
-                    cl.copy(c->sYellow);
+                    cl.copy(c->sYellow.color());
                 else
-                    cl.copy(c->sColor);
+                    cl.copy(c->sColor.color());
 
                 // Darken color if needed
                 if ((c->nFlags & MF_DZONE2) && (c->fDarkZone[2] >= vmax))
@@ -538,11 +530,11 @@ namespace lsp
                 }
 
                 if (! matched)
-                    cl.blend(sIndColor, 0.05f);
+                    cl.blend(sIndColor.color(), 0.05f);
+                cl.scale_lightness(bright);
 
                 // Draw the segment
                 s->fill_rect(x, y, wx, wy, cl);
-//                s->fill_rect(x, y, wx, wy, cl);
 
                 // Update location
                 x      += dx;
@@ -561,11 +553,11 @@ namespace lsp
 
             float value = (c->nFlags & MF_PEAK) ? c->fPeak : c->fValue;
             if ((c->nFlags & MF_RED) && (c->fRedZone <= value))
-                cl.copy(c->sRed);
+                cl.copy(c->sRed.color());
             else if ((c->nFlags & MF_YELLOW) && (c->fYellowZone <= value))
-                cl.copy(c->sYellow);
+                cl.copy(c->sYellow.color());
             else
-                cl.copy(c->sColor);
+                cl.copy(c->sColor.color());
 
             // Darken color if needed
             if ((c->nFlags & MF_DZONE2) && (c->fDarkZone[2] >= value))
@@ -575,6 +567,7 @@ namespace lsp
             else if ((c->nFlags & MF_DZONE0) && (c->fDarkZone[0] >= value))
                 cl.darken(c->fDark[0]);
 
+            cl.scale_lightness(brightness());
 
 //            s->line(x - 3, y, x + 3, y, 1.0f, white);
 //            s->line(x, y-3, x, y+3, 1.0f, white);
@@ -591,6 +584,12 @@ namespace lsp
 
         void LSPMeter::draw(ISurface *s)
         {
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color ind_color(sIndColor);
+
+            ind_color.scale_lightness(brightness());
+
             // Variables
             font_parameters_t   fp;
             text_parameters_t   tp;
@@ -603,27 +602,31 @@ namespace lsp
             ssize_t tsy         = 0;
 
             // Draw background
-            s->fill_rect(0, 0, sSize.nWidth, sSize.nHeight, sBgColor);
+            s->fill_rect(0, 0, sSize.nWidth, sSize.nHeight, bg_color);
             bool aa             = s->set_antialiasing(true);
 
             // Estimate text field size
+            ssize_t m_width     = nMWidth;
+            ssize_t m_height    = (nAngle & 1) ? sSize.nHeight - nBorder*2 : sSize.nWidth - nBorder * 2;
+
             if (bValues)
             {
                 sFont.get_parameters(s, &fp);
                 sFont.get_text_parameters(s, &tp, "+99.9");
 
-                tsx     = tp.Width + 2;
-                tsy     = (nChannels > 1) ? 2 * (fp.Height + 3) : fp.Height + 2;
+                tsx         = tp.Width + 2;
+                tsy         = (nChannels > 1) ? 2 * (fp.Height + 3) : fp.Height + 2;
+                m_height   -= (nAngle & 1) ? tsy : tsx;
             }
 
-            ssize_t s_width     = nMWidth;
-            ssize_t p_width     = nMWidth >> 1;
+            ssize_t s_width     = m_width;
+            ssize_t p_width     = m_width >> 1;
             ssize_t fp_width    = (nSpacing + (p_width<<1));
 
             size_t pairs        = nChannels >> 1;
             ssize_t ov_width    = fp_width * pairs + (s_width + 1) * (nChannels & 1) - 1;
-            ssize_t ov_height   = nMHeight + ((nAngle & 1) ? tsy : tsx);
-            size_t segments     = nMHeight >> 2;
+            ssize_t ov_height   = m_height + ((nAngle & 1) ? tsy : tsx);
+            size_t segments     = m_height >> 2;
             size_t swidth       = segments * 4;
 
             // Draw meter
@@ -641,9 +644,7 @@ namespace lsp
                 float mtr_ix        = left + 0.5f;
                 ssize_t w2          = p_width - 1;
 
-                Color grey(0.5f, 0.5f, 0.5f);
-//                s->fill_rect(left - nBorder, top - nBorder, ov_width + (nBorder << 1), ov_height + (nBorder << 1), grey);
-                s->fill_rect(left - nBorder, top - nBorder, ov_width + (nBorder << 1), ov_height + (nBorder << 1), sIndColor);
+                s->fill_rect(left - nBorder, top - nBorder, ov_width + (nBorder << 1), ov_height + (nBorder << 1), ind_color);
                 channel_t **c       = vChannels;
 
                 if (nAngle & 2)
@@ -732,9 +733,7 @@ namespace lsp
                 ssize_t w2          = p_width - 1;
 
                 // Draw glass
-                Color grey(0.5f, 0.5f, 0.5f);
-//                s->fill_rect(left - nBorder, top - nBorder, ov_height + (nBorder << 1), ov_width + (nBorder << 1), grey);
-                s->fill_rect(left - nBorder, top - nBorder, ov_height + (nBorder << 1), ov_width + (nBorder << 1), sIndColor);
+                s->fill_rect(left - nBorder, top - nBorder, ov_height + (nBorder << 1), ov_width + (nBorder << 1), ind_color);
                 channel_t **c       = vChannels;
 
                 if (nAngle & 2)

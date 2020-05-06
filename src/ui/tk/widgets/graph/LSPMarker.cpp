@@ -14,7 +14,8 @@ namespace lsp
     {
         const w_class_t LSPMarker::metadata = { "LSPMarker", &LSPGraphItem::metadata };
 
-        LSPMarker::LSPMarker(LSPDisplay *dpy): LSPGraphItem(dpy)
+        LSPMarker::LSPMarker(LSPDisplay *dpy): LSPGraphItem(dpy),
+            sColor(this)
         {
             nBasisID    = 0;
             nParallelID = 1;
@@ -22,6 +23,8 @@ namespace lsp
             fLast       = 0.0f;
             fOffset     = 0.0f;
             fAngle      = 0.0f;
+            fDX         = 1.0f;
+            fDY         = 0.0f;
             fMin        = -1.0f;
             fMax        = 1.0f;
             nWidth      = 1;
@@ -92,7 +95,18 @@ namespace lsp
         {
             if (fAngle == value)
                 return;
-            fAngle = value;
+            fDX     = cosf(value);
+            fDY     = sinf(value);
+            fAngle  = value;
+            query_draw();
+        }
+
+        void LSPMarker::set_direction(float dx, float dy)
+        {
+            fDX         = dx;
+            fDY         = dy;
+            fAngle      = get_angle_2d(0.0f, 0.0f, dx, dy);
+
             query_draw();
         }
 
@@ -154,6 +168,10 @@ namespace lsp
             if (cv == NULL)
                 return;
 
+            // Prepare palette
+            Color color(sColor);
+            color.scale_lightness(brightness());
+
             // Get basis
             LSPAxis *basis      = cv->axis(nBasisID);
             if (basis == NULL)
@@ -192,12 +210,12 @@ namespace lsp
             }
             else
             {
-                if (!parallel->angle(x, y, fAngle * M_PI, a, b, c))
+                if (!parallel->angle(x, y, fAngle, a, b, c))
                     return;
                 if (nBorder != 0)
                 {
-                    parallel->rotate_shift(x, y, fAngle * M_PI, nBorder, nx, ny);
-                    if (!parallel->angle(x, y, fAngle * M_PI, a2, b2, c2))
+                    parallel->rotate_shift(x, y, fAngle, nBorder, nx, ny);
+                    if (!parallel->angle(x, y, fAngle, a2, b2, c2))
                         return;
                 }
             }
@@ -215,8 +233,8 @@ namespace lsp
                 IGradient *g = s->linear_gradient(x, y, nx, ny);
                 if (g != NULL)
                 {
-                    g->add_color(0.0f, sColor, 0.25f  + 0.5f * (1.0f - sColor.alpha()));
-                    g->add_color(1.0f, sColor, 1.0f);
+                    g->add_color(0.0f, color, 0.25f  + 0.5f * (1.0f - color.alpha()));
+                    g->add_color(1.0f, color, 1.0f);
 
                     s->parametric_bar(
                         a, b, c, a2, b2, c2,

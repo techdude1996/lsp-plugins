@@ -8,7 +8,7 @@
 #ifndef CORE_UNITS_H_
 #define CORE_UNITS_H_
 
-#include <core/math.h>
+#include <core/stdlib/math.h>
 
 // Some physical constants
 #define MAX_SAMPLE_RATE                     192000              /* Maximum supported sample rate [samples / s]      */
@@ -28,7 +28,9 @@
 #define BPM_MAX                             1000.0f             /* Maximum BPM                                      */
 #define BPM_DEFAULT                         120.0f              /* Default BPM                                      */
 #define DEFAULT_TICKS_PER_BEAT              1920.0f             /* Default tick per beat resolution                 */
-#define MIDI_EVENTS_MAX                     1024                /* Maximum number of MIDI events per buffer         */
+#define MIDI_EVENTS_MAX                     4096                /* Maximum number of MIDI events per buffer         */
+#define OSC_BUFFER_MAX                      0x100000            /* Maximum size of the OSC messaging buffer (bytes) */
+#define OSC_PACKET_MAX                      0x10000             /* Maximum size of the OSC packet (bytes)           */
 #define GOLDEN_RATIO                        1.618               /* Golden ratio                                     */
 #define R_GOLDEN_RATIO                      0.618               /* Reverse golden ratio                             */
 
@@ -41,7 +43,9 @@
 #define GAIN_AMP_P_24_DB                    15.84893            /* +24 dB       */
 #define GAIN_AMP_P_12_DB                    3.98107             /* +12 dB       */
 #define GAIN_AMP_P_6_DB                     1.99526             /* +6 dB        */
+#define GAIN_AMP_P_3_DB                     1.412536            /* +3 dB        */
 #define GAIN_AMP_0_DB                       1.0                 /* 0 dB         */
+#define GAIN_AMP_M_3_DB                     0.707946            /* -3 dB        */
 #define GAIN_AMP_M_6_DB                     0.50118             /* -6 dB        */
 #define GAIN_AMP_M_12_DB                    0.25119             /* -12 dB       */
 #define GAIN_AMP_M_18_DB                    0.12589             /* -18 dB       */
@@ -62,6 +66,7 @@
 #define GAIN_AMP_M_80_DB                    0.0001              /* -80 dB       */
 #define GAIN_AMP_M_100_DB                   0.00001             /* -100 dB      */
 #define GAIN_AMP_M_120_DB                   0.000001            /* -120 dB      */
+#define GAIN_AMP_M_140_DB                   0.0000001           /* -140 dB      */
 #define GAIN_AMP_P_20_DB                    10.0                /* +20 dB       */
 #define GAIN_AMP_P_40_DB                    100.0               /* +40 dB       */
 #define GAIN_AMP_P_60_DB                    1000.0              /* +60 dB       */
@@ -131,7 +136,7 @@ namespace lsp
      */
     inline float samples_to_millis(float sr, float samples)
     {
-        return samples_to_seconds(sr, samples) * 1000.0f;
+        return (samples / sr) * 1000.0f;
     }
 
     /** Convert samples [samp] to distance [m]
@@ -155,7 +160,7 @@ namespace lsp
      */
     inline float samples_to_centimeters(float sr, float speed, float samples)
     {
-        return samples_to_meters(sr, speed, samples) * 100.0f;
+        return ((samples * speed) / sr) * 100.0f;
     }
 
     /** Convert time [ms] to samples [samp]
@@ -166,7 +171,7 @@ namespace lsp
      */
     inline float millis_to_samples(float sr, float time)
     {
-        return seconds_to_samples(sr, time * 0.001f);
+        return (time * 0.001f) * sr;
     }
 
     /** Convert decibels to gain value

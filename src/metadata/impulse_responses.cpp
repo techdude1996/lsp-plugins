@@ -14,51 +14,51 @@ namespace lsp
     //-------------------------------------------------------------------------
     // Impulse responses
 
-    static const char *ir_source_mono[] =
+    static const port_item_t ir_source_mono[] =
     {
-        "None",
-        "Left",
-        "Right",
-        NULL
+        { "None",       "file.none" },
+        { "Left",       "file.left" },
+        { "Right",      "file.right" },
+        { NULL, NULL }
     };
 
-    static const char *ir_source_stereo[] =
+    static const port_item_t ir_source_stereo[] =
     {
-        "None",
-        "File 1 Left",
-        "File 1 Right",
-        "File 2 Left",
-        "File 2 Right",
-        NULL
+        { "None",           "file.none" },
+        { "File 1 Left",    "file.f1l" },
+        { "File 1 Right",   "file.f1r" },
+        { "File 2 Left",    "file.f2l" },
+        { "File 2 Right",   "file.f2r" },
+        { NULL, NULL }
     };
 
-    static const char *ir_fft_rank[] =
+    static const port_item_t ir_fft_rank[] =
     {
-        "512",
-        "1024",
-        "2048",
-        "4096",
-        "8192",
-        "16384",
-        "32767",
-        "65536",
-        NULL
+        { "512",    NULL },
+        { "1024",   NULL },
+        { "2048",   NULL },
+        { "4096",   NULL },
+        { "8192",   NULL },
+        { "16384",  NULL },
+        { "32767",  NULL },
+        { "65536",  NULL },
+        { NULL, NULL }
     };
 
-    static const char *ir_file_select[] =
+    static const port_item_t ir_file_select[] =
     {
-        "File 1",
-        "File 2",
-        NULL
+        { "File 1",     "file.f1" },
+        { "File 2",     "file.f2" },
+        { NULL, NULL }
     };
 
-    static const char *filter_slope[] =
+    static const port_item_t filter_slope[] =
     {
-        "off",
-        "6dB/oct",
-        "12dB/oct",
-        "18dB/oct",
-        NULL
+        { "off",        "eq.slope.off" },
+        { "6 dB/oct",   "eq.slope.6dbo" },
+        { "12 dB/oct",  "eq.slope.12dbo" },
+        { "18 dB/oct",  "eq.slope.18dbo" },
+        { NULL, NULL }
     };
 
     #define IR_COMMON \
@@ -134,7 +134,7 @@ namespace lsp
         PORTS_END
     };
 
-    static const int impulse_responses_classes[] = { C_CONVERTER, C_SPECTRAL, -1 };
+    static const int impulse_responses_classes[] = { C_REVERB, -1 };
 
     const plugin_metadata_t  impulse_responses_mono_metadata::metadata =
     {
@@ -147,8 +147,10 @@ namespace lsp
         0,
         LSP_VERSION(1, 0, 2),
         impulse_responses_classes,
+        E_NONE,
         impulse_responses_mono_ports,
         "convolution/impulse_responses/mono.xml",
+        NULL,
         mono_plugin_port_groups
     };
 
@@ -163,8 +165,10 @@ namespace lsp
         0,
         LSP_VERSION(1, 0, 2),
         impulse_responses_classes,
+        E_NONE,
         impulse_responses_stereo_ports,
         "convolution/impulse_responses/stereo.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 }

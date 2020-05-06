@@ -14,8 +14,11 @@ namespace lsp
         const w_class_t LSPWidget::metadata = { "LSPWidget", NULL };
 
         LSPWidget::LSPWidget(LSPDisplay *dpy):
-            sPadding(this)
+            sPadding(this),
+            sBgColor(this),
+            sBrightness(this)
         {
+            pUID            = NULL;
             pDisplay        = dpy;
             pSurface        = NULL;
             pParent         = NULL;
@@ -48,6 +51,15 @@ namespace lsp
 
         status_t LSPWidget::init()
         {
+            // Initialize style
+            status_t res = sStyle.init();
+            if (res == STATUS_OK)
+                res = sStyle.add_parent(pDisplay->theme()->root());
+            if (res == STATUS_OK)
+                res = sBgColor.bind("bg_color");
+            if (res == STATUS_OK)
+                res = sBrightness.bind("brightness");
+
             // Declare slots
             ui_handler_id_t id = 0;
 
@@ -67,6 +79,8 @@ namespace lsp
             if (id >= 0) id = sSlots.add(LSPSLOT_SHOW, slot_show, self());
             if (id >= 0) id = sSlots.add(LSPSLOT_DESTROY, slot_destroy, self());
             if (id >= 0) id = sSlots.add(LSPSLOT_RESIZE, slot_resize, self());
+            if (id >= 0) id = sSlots.add(LSPSLOT_RESIZE_PARENT, slot_resize_parent, self());
+            if (id >= 0) id = sSlots.add(LSPSLOT_DRAG_REQUEST, slot_drag_request, self());
 
             return (id >= 0) ? STATUS_OK : -id;
         }
@@ -87,6 +101,11 @@ namespace lsp
             // Execute slots and unbind all to prevent duplicate on_destroy calls
             sSlots.execute(LSPSLOT_DESTROY, this);
             sSlots.destroy();
+
+            // Destroy widget identifier
+            if (pUID != NULL)
+                ::free(pUID);
+            pUID = NULL;
         }
 
         void LSPWidget::unlink_widget(LSPWidget *w)
@@ -97,21 +116,16 @@ namespace lsp
                 w->pParent  = NULL;
         }
 
-        void LSPWidget::init_color(color_t value, Color *color)
+        void LSPWidget::init_color(color_t value, LSPColor *color)
         {
+            Color c;
             if (pDisplay != NULL)
             {
                 LSPTheme *theme = pDisplay->theme();
 
                 if (theme != NULL)
-                    theme->get_color(value, color);
+                    theme->get_color(value, c);
             }
-        }
-
-        void LSPWidget::init_color(color_t value, LSPColor *color)
-        {
-            Color c;
-            init_color(value, &c);
             color->copy(&c);
         }
 
@@ -252,6 +266,16 @@ namespace lsp
             return _this->on_resize(ev);
         }
 
+        status_t LSPWidget::slot_resize_parent(LSPWidget *sender, void *ptr, void *data)
+        {
+            if ((ptr == NULL) || (data == NULL))
+                return STATUS_BAD_ARGUMENTS;
+
+            LSPWidget *_this  = static_cast<LSPWidget *>(ptr);
+            realize_t *ev   = static_cast<realize_t *>(data);
+            return _this->on_resize_parent(ev);
+        }
+
         status_t LSPWidget::slot_focus_in(LSPWidget *sender, void *ptr, void *data)
         {
             if ((ptr == NULL) || (data == NULL))
@@ -270,6 +294,18 @@ namespace lsp
             LSPWidget *_this  = static_cast<LSPWidget *>(ptr);
             ws_event_t *ev  = static_cast<ws_event_t *>(data);
             return _this->on_focus_out(ev);
+        }
+
+        status_t LSPWidget::slot_drag_request(LSPWidget *sender, void *ptr, void *data)
+        {
+            if ((ptr == NULL) || (data == NULL))
+                return STATUS_BAD_ARGUMENTS;
+
+            LSPWidget *_this  = static_cast<LSPWidget *>(ptr);
+            ws_event_t *ev  = static_cast<ws_event_t *>(data);
+            const char * const *ctype = _this->pDisplay->get_drag_mime_types();
+
+            return _this->on_drag_request(ev, ctype);
         }
 
         ssize_t LSPWidget::relative_left() const
@@ -357,11 +393,22 @@ namespace lsp
         {
             if (pParent == parent)
                 return;
-            LSPWidgetContainer *wc = widget_cast<LSPWidgetContainer>(pParent);
-            if (wc != NULL)
-                wc->remove(this);
+
+            if (pParent != NULL)
+            {
+                LSPWindow *wnd = widget_cast<LSPWindow>(toplevel());
+                if (wnd != NULL)
+                    wnd->unfocus_child(this);
+                sStyle.remove_parent(pParent->style()); // Unlink style
+
+                LSPWidgetContainer *wc = widget_cast<LSPWidgetContainer>(pParent);
+                if (wc != NULL)
+                    wc->remove(this);
+            }
 
             pParent = parent;
+            if (parent != NULL) // Inherit the style of parent widget
+                sStyle.add_parent(parent->style());
         }
 
         LSPWidget *LSPWidget::toplevel()
@@ -387,10 +434,15 @@ namespace lsp
             nFlags &= ~(REDRAW_SURFACE | REDRAW_CHILD);
         }
 
+        status_t LSPWidget::queue_destroy()
+        {
+            if (pDisplay == NULL)
+                return STATUS_BAD_STATE;
+            return pDisplay->queue_destroy(this);
+        }
+
         void LSPWidget::query_resize()
         {
-//            query_draw(REDRAW_CHILD | REDRAW_SURFACE);
-
             LSPWidget *w = toplevel();
             if ((w != NULL) && (w != this))
                 w->query_resize();
@@ -446,14 +498,10 @@ namespace lsp
 
         void LSPWidget::set_visible(bool visible)
         {
-            bool flag = nFlags & F_VISIBLE;
-            if (!(flag ^ visible))
-                return;
-
-            if (flag)
-                hide();
-            else
+            if (visible)
                 show();
+            else
+                hide();
         }
 
         /** Set mouse pointer
@@ -478,11 +526,25 @@ namespace lsp
             s->draw(src, sSize.nLeft, sSize.nTop);
         }
 
+        status_t LSPWidget::set_unique_id(const char *uid)
+        {
+            char *rep = NULL;
+            if (uid != NULL)
+            {
+                if ((rep = strdup(uid)) == NULL)
+                    return STATUS_NO_MEM;
+            }
+
+            if (pUID != NULL)
+                free(pUID);
+            pUID = rep;
+            return STATUS_OK;
+        }
+
         ISurface *LSPWidget::get_surface(ISurface *s)
         {
             return get_surface(s, sSize.nWidth, sSize.nHeight);
         }
-
 
         ISurface *LSPWidget::get_surface(ISurface *s, ssize_t width, ssize_t height)
         {
@@ -611,6 +673,7 @@ namespace lsp
                 FWD_EVENT(UIE_MOUSE_TRI_CLICK, LSPSLOT_MOUSE_TRI_CLICK )
                 FWD_EVENT(UIE_FOCUS_IN, LSPSLOT_FOCUS_IN )
                 FWD_EVENT(UIE_FOCUS_OUT, LSPSLOT_FOCUS_OUT )
+                FWD_EVENT(UIE_DRAG_REQUEST, LSPSLOT_DRAG_REQUEST )
 
                 default:
                     break;
@@ -681,6 +744,11 @@ namespace lsp
             return STATUS_OK;
         }
 
+        status_t LSPWidget::on_resize_parent(const realize_t *r)
+        {
+            return STATUS_OK;
+        }
+
         status_t LSPWidget::on_hide()
         {
             return STATUS_OK;
@@ -702,6 +770,11 @@ namespace lsp
         }
 
         status_t LSPWidget::on_focus_out(const ws_event_t *e)
+        {
+            return STATUS_OK;
+        }
+
+        status_t LSPWidget::on_drag_request(const ws_event_t *e, const char * const *ctype)
         {
             return STATUS_OK;
         }

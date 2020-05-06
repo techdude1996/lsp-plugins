@@ -23,12 +23,14 @@
 #include <lv2/lv2plug.in/ns/ext/port-props/port-props.h>
 #include <lv2/lv2plug.in/ns/ext/port-groups/port-groups.h>
 #include <lv2/lv2plug.in/ns/ext/resize-port/resize-port.h>
+#include <lv2/lv2plug.in/ns/ext/buf-size/buf-size.h>
 #include <lv2/lv2plug.in/ns/extensions/units/units.h>
 #include <lv2/lv2plug.in/ns/extensions/ui/ui.h>
 #include <lv2/lv2plug.in/ns/ext/instance-access/instance-access.h>
 
 // Non-official features
 #include <3rdparty/ardour/inline-display.h>
+#include <container/lv2/osc.h>
 
 // Include common definitions
 #include <container/const.h>
@@ -36,6 +38,16 @@
 #ifndef LV2_ATOM__Object
     #define LV2_ATOM__Object        LV2_ATOM_PREFIX "Object"
 #endif /* LV2_ATOM__Object */
+
+#pragma pack(push, 1)
+typedef struct LV2_Atom_Midi
+{
+    LV2_Atom    atom;
+    uint8_t     body[8];
+} LV2_Atom_Midi;
+#pragma pack(pop)
+
+#define LV2PORT_MAX_BLOCK_LENGTH        8192
 
 namespace lsp
 {
@@ -81,6 +93,7 @@ namespace lsp
             LV2_URID_Unmap         *unmap;
             LV2_Worker_Schedule    *sched;
             LV2_Inline_Display     *iDisplay;
+            LV2_State_Map_Path     *mapPath;
             LV2UI_Resize           *ui_resize;
             LV2Wrapper             *pWrapper;
 
@@ -100,12 +113,24 @@ namespace lsp
             LV2_URID                uridBlank;
             LV2_URID                uridState;
             LV2_URID                uridStateChange;
+            LV2_URID                uridStateFlags;
             LV2_URID                uridStateRequest;
             LV2_URID                uridConnectUI;
             LV2_URID                uridUINotification;
             LV2_URID                uridDisconnectUI;
             LV2_URID                uridPathType;
             LV2_URID                uridMidiEventType;
+            LV2_URID                uridKvtKeys;
+            LV2_URID                uridKvtObject;
+            LV2_URID                uridKvtType;
+            LV2_URID                uridKvtPropertyType;
+            LV2_URID                uridKvtPropertyValue;
+            LV2_URID                uridKvtPropertyFlags;
+            LV2_URID                uridBlobType;
+            LV2_URID                uridContentType;
+            LV2_URID                uridContent;
+            LV2_URID                uridTypeUInt;
+            LV2_URID                uridTypeULong;
 
             LV2_URID                uridPatchGet;
             LV2_URID                uridPatchSet;
@@ -128,6 +153,24 @@ namespace lsp
             LV2_URID                uridTimeBeatsPerBar;
             LV2_URID                uridTimeBeatsPerMinute;
 
+            LV2_URID                uridMaxBlockLength;
+
+            // OSC-related URIDs
+            LV2_URID                uridOscBundle;
+            LV2_URID                uridOscBundleTimetag;
+            LV2_URID                uridOscBundleItems;
+            LV2_URID                uridOscMessage;
+            LV2_URID                uridOscMessagePath;
+            LV2_URID                uridOscMessageArguments;
+            LV2_URID                uridOscTimetag;
+            LV2_URID                uridOscTimetagIntegral;
+            LV2_URID                uridOscTimetagFraction;
+            LV2_URID                uridOscNil;
+            LV2_URID                uridOscImpulse;
+            LV2_URID                uridOscChar;
+            LV2_URID                uridOscRgba;
+            LV2_URID                uridOscRawPacket;
+
             // LSP-related URIDs
             LV2_URID                uridMeshType;
             LV2_URID                uridMeshItems;
@@ -142,12 +185,13 @@ namespace lsp
 
             LV2UI_Controller        ctl;
             LV2UI_Write_Function    wf;
-            ssize_t                 nAtomIn;        // Atom input port identifier
-            ssize_t                 nAtomOut;       // Atom output port identifier
-            uint8_t                *pBuffer;        // Atom serialization buffer
-            size_t                  nBufSize;       // Atom serialization buffer size
-            float                   fUIRefreshRate; // UI refresh rate
-            void                   *pParentWindow;  // Parent window handle
+            ssize_t                 nAtomIn;            // Atom input port identifier
+            ssize_t                 nAtomOut;           // Atom output port identifier
+            size_t                  nMaxBlockLength;    // Maximum size of audio block passed to plugin
+            uint8_t                *pBuffer;            // Atom serialization buffer
+            size_t                  nBufSize;           // Atom serialization buffer size
+            float                   fUIRefreshRate;     // UI refresh rate
+            void                   *pParentWindow;      // Parent window handle
 
         public:
             inline LV2Extensions(const LV2_Feature* const* feat, const char *uri, LV2UI_Controller lv2_ctl, LV2UI_Write_Function lv2_write)
@@ -157,9 +201,11 @@ namespace lsp
                 ui_resize           = NULL;
                 sched               = NULL;
                 iDisplay            = NULL;
+                mapPath             = NULL;
                 pParentWindow       = NULL;
                 pWrapper            = NULL;
                 fUIRefreshRate      = MESH_REFRESH_RATE;
+                nMaxBlockLength     = LV2PORT_MAX_BLOCK_LENGTH;
 
                 const LV2_Options_Option *opts = NULL;
 
@@ -197,50 +243,81 @@ namespace lsp
                 }
 
                 // Initialize basic URIDs
-                ctl                 = lv2_ctl;
-                wf                  = lv2_write;
-                nAtomIn             = -1;
-                nAtomOut            = -1;
-                pBuffer             = NULL;
-                nBufSize            = 0;
+                ctl                         = lv2_ctl;
+                wf                          = lv2_write;
+                nAtomIn                     = -1;
+                nAtomOut                    = -1;
+                pBuffer                     = NULL;
+                nBufSize                    = 0;
 
-                uriPlugin           = uri;
-                uridPlugin          = (map != NULL) ? map->map(map->handle, uriPlugin) : -1;
+                uriPlugin                   = uri;
+                uridPlugin                  = (map != NULL) ? map->map(map->handle, uriPlugin) : -1;
 
                 if (map != NULL)
                     lv2_atom_forge_init(&forge, map);
 
-                uridAtomTransfer    = map_uri(LV2_ATOM__atomTransfer);
-                uridEventTransfer   = map_uri(LV2_ATOM__eventTransfer);
-                uridObject          = forge.Object;
-                uridBlank           = map_uri(LV2_ATOM__Blank);
-                uridState           = map_primitive("state");
-                uridConnectUI       = map_primitive("ui_connect");
-                uridUINotification  = map_type("UINotification");
-                uridDisconnectUI    = map_primitive("ui_disconnect");
-                uridStateRequest    = map_type("StateRequest");
-                uridStateChange     = map_type("StateChange");
-                uridPathType        = forge.Path;
-                uridMidiEventType   = map_uri(LV2_MIDI__MidiEvent);
-                uridPatchGet        = map_uri(LV2_PATCH__Get);
-                uridPatchSet        = map_uri(LV2_PATCH__Set);
-                uridPatchMessage    = map_uri(LV2_PATCH__Message);
-                uridPatchResponse   = map_uri(LV2_PATCH__Response);
-                uridPatchProperty   = map_uri(LV2_PATCH__property);
-                uridPatchValue      = map_uri(LV2_PATCH__value);
-                uridAtomUrid        = forge.URID;
-                uridChunk           = forge.Chunk;
-                uridUpdateRate      = map_uri(LV2_UI__updateRate);
+                uridAtomTransfer            = map_uri(LV2_ATOM__atomTransfer);
+                uridEventTransfer           = map_uri(LV2_ATOM__eventTransfer);
+                uridObject                  = forge.Object;
+                uridBlank                   = map_uri(LV2_ATOM__Blank);
+                uridState                   = map_primitive("state");
+                uridConnectUI               = map_primitive("ui_connect");
+                uridUINotification          = map_type("UINotification");
+                uridDisconnectUI            = map_primitive("ui_disconnect");
+                uridStateRequest            = map_type("StateRequest");
+                uridStateChange             = map_type("StateChange");
+                uridStateFlags              = map_type("StateFlags");
+                uridPathType                = forge.Path;
+                uridMidiEventType           = map_uri(LV2_MIDI__MidiEvent);
+                uridKvtObject               = map_primitive("KVT");
+                uridKvtType                 = map_type("KVT");
+                uridKvtPropertyType         = map_type("KVTProperty");
+                uridKvtPropertyValue        = map_field("KVTProperty#value");
+                uridKvtPropertyFlags        = map_field("KVTProperty#flags");
+                uridBlobType                = map_type("Blob");
+                uridContentType             = map_field("Blob#ContentType");
+                uridContent                 = map_field("Blob#Content");
 
-                uridTimePosition    = map_uri(LV2_TIME__Position);
-                uridTimeFrame       = map_uri(LV2_TIME__frame);
-                uridTimeFrameRate   = map_uri(LV2_TIME__framesPerSecond);
-                uridTimeSpeed       = map_uri(LV2_TIME__speed);
-                uridTimeBarBeat     = map_uri(LV2_TIME__barBeat);
-                uridTimeBar         = map_uri(LV2_TIME__bar);
-                uridTimeBeatUnit    = map_uri(LV2_TIME__beatUnit);
-                uridTimeBeatsPerBar = map_uri(LV2_TIME__beatsPerBar);
-                uridTimeBeatsPerMinute = map_uri(LV2_TIME__beatsPerMinute);
+                uridTypeUInt                = map_uri(LV2_ATOM_PREFIX "UInt" );
+                uridTypeULong               = map_uri(LV2_ATOM_PREFIX "ULong" );
+
+                uridPatchGet                = map_uri(LV2_PATCH__Get);
+                uridPatchSet                = map_uri(LV2_PATCH__Set);
+                uridPatchMessage            = map_uri(LV2_PATCH__Message);
+                uridPatchResponse           = map_uri(LV2_PATCH__Response);
+                uridPatchProperty           = map_uri(LV2_PATCH__property);
+                uridPatchValue              = map_uri(LV2_PATCH__value);
+                uridAtomUrid                = forge.URID;
+                uridChunk                   = forge.Chunk;
+                uridUpdateRate              = map_uri(LV2_UI__updateRate);
+
+                uridTimePosition            = map_uri(LV2_TIME__Position);
+                uridTimeFrame               = map_uri(LV2_TIME__frame);
+                uridTimeFrameRate           = map_uri(LV2_TIME__framesPerSecond);
+                uridTimeSpeed               = map_uri(LV2_TIME__speed);
+                uridTimeBarBeat             = map_uri(LV2_TIME__barBeat);
+                uridTimeBar                 = map_uri(LV2_TIME__bar);
+                uridTimeBeatUnit            = map_uri(LV2_TIME__beatUnit);
+                uridTimeBeatsPerBar         = map_uri(LV2_TIME__beatsPerBar);
+                uridTimeBeatsPerMinute      = map_uri(LV2_TIME__beatsPerMinute);
+
+                uridMaxBlockLength          = map_uri(LV2_BUF_SIZE__maxBlockLength);
+
+                // OSC-related URIDs
+                uridOscBundle               = map_uri(LV2_OSC__Bundle);
+                uridOscBundleTimetag        = map_uri(LV2_OSC__bundleTimetag);
+                uridOscBundleItems          = map_uri(LV2_OSC__bundleItems);
+                uridOscMessage              = map_uri(LV2_OSC__Message);
+                uridOscMessagePath          = map_uri(LV2_OSC__messagePath);
+                uridOscMessageArguments     = map_uri(LV2_OSC__messageArguments);
+                uridOscTimetag              = map_uri(LV2_OSC__Timetag);
+                uridOscTimetagIntegral      = map_uri(LV2_OSC__timetagIntegral);
+                uridOscTimetagFraction      = map_uri(LV2_OSC__timetagFraction);
+                uridOscNil                  = map_uri(LV2_OSC__Nil);
+                uridOscImpulse              = map_uri(LV2_OSC__Impulse);
+                uridOscChar                 = map_uri(LV2_OSC__Char);
+                uridOscRgba                 = map_uri(LV2_OSC__RGBA);
+                uridOscRawPacket            = map_uri(LV2_OSC__RawPacket);
 
                 // LSP-related URIDs
                 uridMeshType                = map_type("Mesh");
@@ -274,7 +351,7 @@ namespace lsp
                                 opts->value
                         );
 
-                        // Move to next option
+                        // Update Rate for the UI
                         if ((opts->context == LV2_OPTIONS_INSTANCE) &&
                             (opts->key == uridUpdateRate) &&
                             (opts->value != NULL))
@@ -289,7 +366,21 @@ namespace lsp
                                 fUIRefreshRate  = *reinterpret_cast<const int64_t *>(opts->value);
                             if (fUIRefreshRate < 0)
                                 fUIRefreshRate = MESH_REFRESH_RATE;
-                            lsp_trace("UI refresh rate was set to %f", fUIRefreshRate);
+                            lsp_trace("UI refresh rate has been set to %f", fUIRefreshRate);
+                        }
+
+                        if ((opts->context == LV2_OPTIONS_INSTANCE) &&
+                            (opts->key == uridMaxBlockLength) &&
+                            (opts->value != NULL))
+                        {
+                            ssize_t blk_len = nMaxBlockLength;
+                            if ((opts->type == forge.Int) && (opts->size == sizeof(int32_t)))
+                                blk_len = *reinterpret_cast<const int32_t *>(opts->value);
+                            else if ((opts->type == forge.Long) && (opts->size == sizeof(int64_t)))
+                                blk_len = *reinterpret_cast<const int64_t *>(opts->value);
+                            if (blk_len > 0)
+                                nMaxBlockLength = blk_len;
+                            lsp_trace("MaxBlockLength has been set to %d", int(nMaxBlockLength));
                         }
 
                         opts++;
@@ -387,8 +478,14 @@ namespace lsp
 
             inline LV2_Atom_Forge_Ref forge_path(const char *str)
             {
-                size_t len = strlen(str);
+                size_t len = ::strlen(str);
                 return lv2_atom_forge_typed_string(&forge, forge.Path, str, len);
+            }
+
+            inline LV2_Atom_Forge_Ref forge_string(const char *str)
+            {
+                size_t len = ::strlen(str);
+                return lv2_atom_forge_typed_string(&forge, forge.String, str, len);
             }
 
             inline void forge_pop(LV2_Atom_Forge_Frame* frame)
@@ -451,14 +548,14 @@ namespace lsp
                     return -1;
 
                 va_list vl;
-                char tmpbuf[1024];
+                char tmpbuf[2048];
 
                 va_start(vl, fmt);
                 vsnprintf(tmpbuf, sizeof(tmpbuf), fmt, vl);
                 va_end(vl);
 
                 LV2_URID res = map->map(map->handle, tmpbuf);
-                lsp_trace("URID for <%s> is %d", tmpbuf, int(res));
+                lsp_trace("URID for <%s> is %d (0x%x)", tmpbuf, int(res), int(res));
                 return res;
             }
 
@@ -477,6 +574,11 @@ namespace lsp
                 return map_uri("%s/%s", LSP_TYPE_URI(lv2), id);
             }
 
+            inline LV2_URID map_kvt(const char *id)
+            {
+                return map_uri(LSP_KVT_URI "%s", id);
+            }
+
             inline LV2_URID map_primitive(const char *id)
             {
                 return map_uri("%s/%s", uriPlugin, id);
@@ -493,6 +595,15 @@ namespace lsp
                 hStore          = store;
                 hRetrieve       = retrieve;
                 hHandle         = handle;
+
+                for (size_t i=0; features[i]; ++i)
+                {
+                    const LV2_Feature *f = features[i];
+                    lsp_trace("Host reported state extension uri=%s, data=%p", f->URI, f->data);
+
+                    if (!::strcmp(f->URI, LV2_STATE__mapPath))
+                        mapPath = reinterpret_cast<LV2_State_Map_Path *>(f->data);
+                }
             }
 
             inline void store_value(LV2_URID urid, LV2_URID type, const void *data, size_t size)
@@ -502,23 +613,28 @@ namespace lsp
                 hStore(hHandle, urid, data, size, type, LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE);
             }
 
-            inline const void *restore_value(LV2_URID urid, LV2_URID type, size_t *size)
+            inline const void *retrieve_value(LV2_URID urid, uint32_t *type, size_t *size)
             {
                 if ((hRetrieve == NULL) || (hHandle == NULL))
                     return NULL;
 
-                size_t t_size;
-                uint32_t t_type, t_flags;
-                lsp_trace("retrieve(%d (%s))", urid, unmap_urid(urid));
-                const void *ptr   = hRetrieve(hHandle, urid, &t_size, &t_type, &t_flags);
-                lsp_trace("retrieved ptr = %p, size=%d, type=%d, flags=0x%x", ptr, int(t_size), int(t_type), int(t_flags));
-                if (ptr == NULL)
-                    return NULL;
+                uint32_t t_flags;
+                lsp_trace("retrieve %d (%s)", urid, unmap_urid(urid));
+                const void *ptr   = hRetrieve(hHandle, urid, size, type, &t_flags);
+                lsp_trace("retrieved ptr = %p, size=%d, type=%d, flags=0x%x", ptr, int(*size), int(*type), int(t_flags));
 
-                lsp_trace("retrieved type = %d (%s)", int(t_type), unmap_urid(t_type));
+                return ptr;
+            }
+
+            inline const void *restore_value(LV2_URID urid, LV2_URID type, size_t *size)
+            {
+                uint32_t t_type;
+                size_t t_size;
+                const void *ptr = retrieve_value(urid, &t_type, &t_size);
                 if (t_type != type)
                     return NULL;
 
+                lsp_trace("retrieved type = %d (%s)", int(t_type), unmap_urid(t_type));
                 *size    = t_size;
                 return ptr;
             }
@@ -528,6 +644,7 @@ namespace lsp
                 hStore          = NULL;
                 hRetrieve       = NULL;
                 hHandle         = NULL;
+                mapPath         = NULL;
             }
 
             inline bool ui_create_atom_transport(size_t port, size_t buf_size)
@@ -553,7 +670,7 @@ namespace lsp
                 if (pWrapper != NULL)
                     return true;
 
-                // Prepare ofrge for transfer
+                // Prepare forge for transfer
                 LV2_Atom_Forge_Frame    frame;
                 forge_set_buffer(pBuffer, nBufSize);
 
@@ -618,7 +735,7 @@ namespace lsp
                 return true;
             }
 
-            inline bool ui_write_state(LV2Serializable *p)
+            inline bool ui_write_state(LV2Serializable *p, size_t flags = 0)
             {
                 if ((map == NULL) || (p->get_urid() <= 0))
                     return false;
@@ -629,6 +746,11 @@ namespace lsp
 
                 forge_frame_time(0);
                 LV2_Atom *msg = forge_object(&frame, uridState, uridStateChange);
+                if (flags != 0)
+                {
+                    forge_key(uridStateFlags);
+                    forge_int(int(flags));
+                }
                 forge_key(p->get_urid());
                 p->serialize();
                 forge_pop(&frame);
@@ -750,13 +872,16 @@ namespace lsp
                     size           += (4 * sizeof(LV2_Atom_Int) + 0x100) + // Headers
                                         size_t(p->step) * FRAMEBUFFER_BULK_MAX * sizeof(float);
                     break;
-//                case R_MIDI:
-//                    if (IS_OUT_PORT(p) && (!out))
-//                        break;
-//                    else if (IS_IN_PORT(p) && (!in))
-//                        break;
-//                    size            += (sizeof(LV2_Atom_Event) + 0x10) * MIDI_EVENTS_MAX; // Size of atom event + pad for MIDI data
-//                    break;
+                case R_OSC:
+                    size           += OSC_BUFFER_MAX;
+                    break;
+                case R_MIDI:
+                    if (IS_OUT_PORT(p) && (!out))
+                        break;
+                    else if (IS_IN_PORT(p) && (!in))
+                        break;
+                    size            += (sizeof(LV2_Atom_Event) + 0x10) * MIDI_EVENTS_MAX; // Size of atom event + pad for MIDI data
+                    break;
                 case R_PATH: // Both sizes: IN and OUT
                     size            += PATCH_OVERHEAD + PATH_MAX;
                     break;

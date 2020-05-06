@@ -11,11 +11,13 @@ namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlButton::metadata = { "CtlButton", &CtlWidget::metadata };
         
         CtlButton::CtlButton(CtlRegistry *src, LSPButton *widget): CtlWidget(src, widget)
         {
-            fValue      = 0;
-            pPort       = NULL;
+            pClass          = &metadata;
+            fValue          = 0;
+            pPort           = NULL;
         }
         
         CtlButton::~CtlButton()
@@ -74,6 +76,7 @@ namespace lsp
 
             if (pPort != NULL)
             {
+                lsp_trace("Setting %s = %f", pPort->id(), value);
                 pPort->set_value(value);
                 pPort->notify_all();
             }
@@ -121,11 +124,19 @@ namespace lsp
 
             // Initialize color controllers
             sColor.init_hsl(pRegistry, btn, btn->color(), A_COLOR, A_HUE_ID, A_SAT_ID, A_LIGHT_ID);
-            sBgColor.init_basic(pRegistry, btn, btn->bg_color(), A_BG_COLOR);
             sTextColor.init_basic(pRegistry, btn, btn->font()->color(), A_TEXT_COLOR);
 
             // Bind slots
             btn->slots()->bind(LSPSLOT_CHANGE, slot_change, this);
+        }
+
+        void CtlButton::set(const char *name, const char *value)
+        {
+            LSPButton *btn = widget_cast<LSPButton>(pWidget);
+            if (btn != NULL)
+                set_lc_attr(A_TEXT, btn->title(), name, value);
+
+            CtlWidget::set(name, value);
         }
 
         void CtlButton::set(widget_attribute_t att, const char *value)
@@ -156,21 +167,15 @@ namespace lsp
                     if (btn != NULL)
                         PARSE_BOOL(value, btn->set_led(__));
                     break;
-                case A_TEXT:
-                    if (btn != NULL)
-                        btn->set_title(value);
-                    break;
                 case A_EDITABLE:
                     if (btn != NULL)
                         PARSE_BOOL(value, btn->set_editable(__));
                     break;
                 default:
                 {
-                    bool set = sBgColor.set(att, value);
-                    set |= sColor.set(att, value);
-                    set |= sTextColor.set(att, value);
-                    if (!set)
-                        CtlWidget::set(att, value);
+                    sColor.set(att, value);
+                    sTextColor.set(att, value);
+                    CtlWidget::set(att, value);
                     break;
                 }
             }

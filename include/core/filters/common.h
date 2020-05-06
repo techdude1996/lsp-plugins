@@ -35,6 +35,10 @@ namespace lsp
         FLT_MT_RLC_RESONANCE,
         FLT_BT_RLC_NOTCH,
         FLT_MT_RLC_NOTCH,
+        FLT_BT_RLC_ALLPASS,
+        FLT_MT_RLC_ALLPASS,
+        FLT_BT_RLC_ALLPASS2,
+        FLT_MT_RLC_ALLPASS2,
         FLT_BT_RLC_LADDERPASS,
         FLT_MT_RLC_LADDERPASS,
         FLT_BT_RLC_LADDERREJ,
@@ -61,6 +65,8 @@ namespace lsp
         FLT_MT_BWC_LADDERREJ,
         FLT_BT_BWC_BANDPASS,
         FLT_MT_BWC_BANDPASS,
+        FLT_BT_BWC_ALLPASS,
+        FLT_MT_BWC_ALLPASS,
 
         // Linkwitz–Riley filters
         FLT_BT_LRX_LOPASS,
@@ -78,14 +84,29 @@ namespace lsp
         FLT_BT_LRX_LADDERREJ,
         FLT_MT_LRX_LADDERREJ,
         FLT_BT_LRX_BANDPASS,
-        FLT_MT_LRX_BANDPASS
+        FLT_MT_LRX_BANDPASS,
+        FLT_BT_LRX_ALLPASS,
+        FLT_MT_LRX_ALLPASS,
+
+        // APO (textbook) Style digital biquad filters (DR stands for direct design: coefficient served directly in digital domain)
+        FLT_DR_APO_LOPASS,
+        FLT_DR_APO_HIPASS,
+        FLT_DR_APO_BANDPASS,
+        FLT_DR_APO_NOTCH,
+        FLT_DR_APO_ALLPASS,
+        FLT_DR_APO_ALLPASS2,
+        FLT_DR_APO_PEAKING,
+        FLT_DR_APO_LOSHELF,
+        FLT_DR_APO_HISHELF,
+        FLT_DR_APO_LADDERPASS,
+        FLT_DR_APO_LADDERREJ,
     };
 
     typedef struct filter_params_t
     {
         size_t      nType;      // Filter class
         float       fFreq;      // Frequency
-        float       fFreq2;     // Second frequency (for bandpass filter)
+        float       fFreq2;     // Second frequency (for bandpass/allpass2 filter)
         float       fGain;      // Gain
         size_t      nSlope;     // Filter slope
         float       fQuality;   // Quality factor

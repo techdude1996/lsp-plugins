@@ -20,12 +20,21 @@ namespace lsp
     {
         namespace x11
         {
-            X11Window::X11Window(X11Display *core, size_t screen, ::Window wnd, IEventHandler *handler): INativeWindow(core, handler)
+            X11Window::X11Window(X11Display *core, size_t screen, ::Window wnd, IEventHandler *handler, bool wrapper): INativeWindow(core, handler)
             {
                 lsp_trace("hwindow = %x", int(wnd));
                 pX11Display             = core;
-                hWindow                 = 0;
-                hParent                 = wnd;
+                bWrapper                = wrapper;
+                if (wrapper)
+                {
+                    hWindow                 = wnd;
+                    hParent                 = None;
+                }
+                else
+                {
+                    hWindow                 = None;
+                    hParent                 = wnd;
+                }
                 nScreen                 = screen;
                 pSurface                = NULL;
                 enBorderStyle           = BS_SIZABLE;
@@ -58,112 +67,180 @@ namespace lsp
             status_t X11Window::init()
             {
                 Display *dpy = pX11Display->x11display();
+                Atom dnd_version    = 5;    // Version 5 of protocol is supported
 
-                // Try to create window
-                pX11Display->sync();
-
-                // Calculate window constraints
-                calc_constraints(&sSize, &sSize);
-
-                // Create window
-                Window wnd = 0;
-
-                if (hParent > 0)
+                if (bWrapper)
                 {
-                    XWindowAttributes atts;
-                    XGetWindowAttributes(pX11Display->x11display(), hParent, &atts);
-                    nScreen = pX11Display->get_screen(atts.root);
+                    if (!pX11Display->addWindow(this))
+                        return STATUS_NO_MEM;
 
-                    wnd = XCreateWindow(
-                        dpy, hParent,
-                        sSize.nLeft, sSize.nTop, sSize.nWidth, sSize.nHeight,
-                        0, 0, CopyFromParent, CopyFromParent, 0, NULL);
+                    // Now select input for the handle
+                    lsp_trace("Issuing XSelectInput");
+                    ::XSelectInput(dpy, hWindow,
+                        KeyPressMask |
+                        KeyReleaseMask |
+                        ButtonPressMask |
+                        ButtonReleaseMask |
+                        EnterWindowMask |
+                        LeaveWindowMask |
+                        PointerMotionMask |
+        //                PointerMotionHintMask |
+                        Button1MotionMask |
+                        Button2MotionMask |
+                        Button3MotionMask |
+                        Button4MotionMask |
+                        Button5MotionMask |
+                        ButtonMotionMask |
+                        KeymapStateMask |
+                        ExposureMask |
+                        StructureNotifyMask |
+                        FocusChangeMask |
+                        PropertyChangeMask
+                    );
+
+                    /**
+                     * In order for the user to be able to transfer data from any application to any other application
+                     * via DND, every application that supports XDND version N must also support all previous versions
+                     * (3 to N-1). The XdndAware property provides the highest version number supported by the target
+                     * (Nt). If the source supports versions up to Ns, then the version that will actually be used is
+                     * min(Ns,Nt). This is the version sent in the XdndEnter message. It is important to note that
+                     * XdndAware allows this to be calculated before any messages are actually sent.
+                     */
+                    ::XChangeProperty(dpy, hWindow, pX11Display->atoms().X11_XdndAware, XA_ATOM, 32, PropModeReplace,
+                                    reinterpret_cast<unsigned char *>(&dnd_version), 1);
+                    /**
+                     * The proxy window must have the XdndProxy property set to point to itself. If it doesn't or if the
+                     * proxy window doesn't exist at all, one should ignore XdndProxy on the assumption that it is left
+                     * over after a crash.
+                     */
+                    ::XChangeProperty(dpy, hWindow, pX11Display->atoms().X11_XdndProxy, XA_WINDOW, 32, PropModeReplace,
+                                    reinterpret_cast<unsigned char *>(&hWindow), 1);
+
+                    pX11Display->flush();
                 }
                 else
                 {
-                    size_t n = pX11Display->screens();
-                    wnd = (nScreen < n) ? RootWindow(dpy, nScreen) : pX11Display->x11root();
-                    nScreen = pX11Display->get_screen(wnd);
+                    // Try to create window
+                    pX11Display->sync();
 
-                    wnd = XCreateWindow(
-                        dpy, wnd,
-                        sSize.nLeft, sSize.nTop, sSize.nWidth, sSize.nHeight,
-                        0, 0, CopyFromParent, CopyFromParent, 0, NULL);
-                }
+                    // Calculate window constraints
+                    calc_constraints(&sSize, &sSize);
 
-                lsp_trace("wnd=%x, external=%d, external_id=%x", int(wnd), int(hParent > 0), int(hParent));
-                if (wnd <= 0)
-                    return STATUS_UNKNOWN_ERR;
-                pX11Display->flush();
+                    // Create window
+                    Window wnd = 0;
 
-//                // Reparent window
-//                if (hParent > 0)
-//                {
-//                    lsp_trace("Performing reparent...");
-//                    XResizeWindow(dpy, hParent, sSize.nWidth, sSize.nHeight);
-//                    XReparentWindow(dpy, wnd, hParent, 0, 0);
-//                    pX11Display->sync();
-//                }
+                    if (hParent > 0)
+                    {
+                        XWindowAttributes atts;
+                        XGetWindowAttributes(pX11Display->x11display(), hParent, &atts);
+                        nScreen = pX11Display->get_screen(atts.root);
 
-                // Get protocols
-                lsp_trace("Issuing XSetWMProtocols");
-                Atom atom_close = pX11Display->atoms().X11_WM_DELETE_WINDOW;
-                XSetWMProtocols(dpy, wnd, &atom_close, 1);
-                pX11Display->flush();
+                        wnd = XCreateWindow(
+                            dpy, hParent,
+                            sSize.nLeft, sSize.nTop, sSize.nWidth, sSize.nHeight,
+                            0, 0, CopyFromParent, CopyFromParent, 0, NULL);
+                    }
+                    else
+                    {
+                        size_t n = pX11Display->screens();
+                        wnd = (nScreen < n) ? RootWindow(dpy, nScreen) : pX11Display->x11root();
+                        nScreen = pX11Display->get_screen(wnd);
 
-                // Now create X11Window instance
-                if (!pX11Display->addWindow(this))
-                {
-                    XDestroyWindow(dpy, wnd);
+                        wnd = XCreateWindow(
+                            dpy, wnd,
+                            sSize.nLeft, sSize.nTop, sSize.nWidth, sSize.nHeight,
+                            0, 0, CopyFromParent, CopyFromParent, 0, NULL);
+                    }
+
+                    lsp_trace("wnd=%x, external=%d, external_id=%x", int(wnd), int(hParent > 0), int(hParent));
+                    if (wnd <= 0)
+                        return STATUS_UNKNOWN_ERR;
                     pX11Display->flush();
-                    return STATUS_NO_MEM;
+
+                    // Get protocols
+                    lsp_trace("Issuing XSetWMProtocols");
+                    Atom atom_close     = pX11Display->atoms().X11_WM_DELETE_WINDOW;
+                    ::XSetWMProtocols(dpy, wnd, &atom_close, 1);
+
+                    /**
+                     * In order for the user to be able to transfer data from any application to any other application
+                     * via DND, every application that supports XDND version N must also support all previous versions
+                     * (3 to N-1). The XdndAware property provides the highest version number supported by the target
+                     * (Nt). If the source supports versions up to Ns, then the version that will actually be used is
+                     * min(Ns,Nt). This is the version sent in the XdndEnter message. It is important to note that
+                     * XdndAware allows this to be calculated before any messages are actually sent.
+                     */
+                    ::XChangeProperty(dpy, wnd, pX11Display->atoms().X11_XdndAware, XA_ATOM, 32, PropModeReplace,
+                                    reinterpret_cast<unsigned char *>(&dnd_version), 1);
+                    /**
+                     * The proxy window must have the XdndProxy property set to point to itself. If it doesn't or if the
+                     * proxy window doesn't exist at all, one should ignore XdndProxy on the assumption that it is left
+                     * over after a crash.
+                     */
+                    ::XChangeProperty(dpy, wnd, pX11Display->atoms().X11_XdndProxy, XA_WINDOW, 32, PropModeReplace,
+                                    reinterpret_cast<unsigned char *>(&wnd), 1);
+                    pX11Display->flush();
+
+                    // Now create X11Window instance
+                    if (!pX11Display->addWindow(this))
+                    {
+                        XDestroyWindow(dpy, wnd);
+                        pX11Display->flush();
+                        return STATUS_NO_MEM;
+                    }
+
+                    // Now select input for new handle
+                    lsp_trace("Issuing XSelectInput");
+                    ::XSelectInput(dpy, wnd,
+                        KeyPressMask |
+                        KeyReleaseMask |
+                        ButtonPressMask |
+                        ButtonReleaseMask |
+                        EnterWindowMask |
+                        LeaveWindowMask |
+                        PointerMotionMask |
+        //                PointerMotionHintMask |
+                        Button1MotionMask |
+                        Button2MotionMask |
+                        Button3MotionMask |
+                        Button4MotionMask |
+                        Button5MotionMask |
+                        ButtonMotionMask |
+                        KeymapStateMask |
+                        ExposureMask |
+        //                VisibilityChangeMask |
+                        StructureNotifyMask |
+        //                ResizeRedirectMask |
+                        SubstructureNotifyMask |
+                        SubstructureRedirectMask |
+                        FocusChangeMask |
+                        PropertyChangeMask |
+                        ColormapChangeMask |
+                        OwnerGrabButtonMask
+                    );
+                    if (hParent > 0)
+                    {
+                        ::XSelectInput(dpy, hParent,
+                            PropertyChangeMask |
+                            StructureNotifyMask
+                        );
+                    }
+
+                    pX11Display->flush();
+
+                    sMotif.flags        = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS | MWM_HINTS_INPUT_MODE | MWM_HINTS_STATUS;
+                    sMotif.functions    = MWM_FUNC_ALL;
+                    sMotif.decorations  = MWM_DECOR_ALL;
+                    sMotif.input_mode   = MWM_INPUT_MODELESS;
+                    sMotif.status       = 0;
+
+                    hWindow = wnd;
+
+                    // Initialize window border style and actions
+                    set_border_style(BS_SIZABLE);
+                    set_window_actions(WA_ALL);
+                    set_mouse_pointer(MP_DEFAULT);
                 }
-
-                // Now select input for new handle
-                lsp_trace("Issuing XSelectInput");
-                XSelectInput(dpy, wnd,
-                    KeyPressMask |
-                    KeyReleaseMask |
-                    ButtonPressMask |
-                    ButtonReleaseMask |
-                    EnterWindowMask |
-                    LeaveWindowMask |
-                    PointerMotionMask |
-    //                PointerMotionHintMask |
-                    Button1MotionMask |
-                    Button2MotionMask |
-                    Button3MotionMask |
-                    Button4MotionMask |
-                    Button5MotionMask |
-                    ButtonMotionMask |
-                    KeymapStateMask |
-                    ExposureMask |
-    //                VisibilityChangeMask |
-                    StructureNotifyMask |
-    //                ResizeRedirectMask |
-                    SubstructureNotifyMask |
-                    SubstructureRedirectMask |
-                    FocusChangeMask |
-                    PropertyChangeMask |
-                    ColormapChangeMask |
-                    OwnerGrabButtonMask
-                );
-                pX11Display->flush();
-
-                sMotif.flags        = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS | MWM_HINTS_INPUT_MODE | MWM_HINTS_STATUS;
-                sMotif.functions    = MWM_FUNC_ALL;
-                sMotif.decorations  = MWM_DECOR_ALL;
-                sMotif.input_mode   = MWM_INPUT_MODELESS;
-                sMotif.status       = 0;
-
-//                XKeysymToKeycode(dpy, XK_F1); // To receive MappingNotify event
-
-                hWindow = wnd;
-
-                // Initialize window border style and actions
-                set_border_style(BS_SIZABLE);
-                set_window_actions(WA_ALL);
-                set_mouse_pointer(MP_DEFAULT);
 
                 lsp_trace("init ok");
 
@@ -185,17 +262,25 @@ namespace lsp
                 // Drop surface
                 drop_surface();
 
-                // Remove window from registry
-                if (pX11Display != NULL)
-                    pX11Display->remove_window(this);
-
-                // Destroy window
-                if (hWindow > 0)
+                if (!bWrapper)
                 {
-                    XDestroyWindow(pX11Display->x11display(), hWindow);
-                    hWindow = 0;
+                    // Remove window from registry
+                    if (pX11Display != NULL)
+                        pX11Display->remove_window(this);
+
+                    // Destroy window
+                    if (hWindow > 0)
+                    {
+                        XDestroyWindow(pX11Display->x11display(), hWindow);
+                        hWindow = 0;
+                    }
+                    pX11Display->sync();
                 }
-                pX11Display->sync();
+                else
+                {
+                    hWindow = None;
+                    hParent = None;
+                }
             }
 
             void X11Window::calc_constraints(realize_t *dst, const realize_t *req)
@@ -214,6 +299,8 @@ namespace lsp
 
             ISurface *X11Window::get_surface()
             {
+                if (bWrapper)
+                    return NULL;
                 return pSurface;
             }
 
@@ -244,6 +331,10 @@ namespace lsp
                     sz.max_height   = sSize.nHeight;
                 }
 
+                lsp_trace("Window constraints: min_width=%d, min_height=%d, max_width=%d, max_height=%d",
+                        int(sz.min_width), int(sz.min_height), int(sz.max_width), int(sz.max_height)
+                    );
+
                 XSetWMNormalHints(pX11Display->x11display(), hWindow, &sz);
 //                pX11Display->sync();
                 return STATUS_OK;
@@ -272,6 +363,9 @@ namespace lsp
                 {
                     case UIE_SHOW:
                     {
+                        if (bWrapper)
+                            break;
+
                         // Drop previously existed drawing surface
                         drop_surface();
 
@@ -284,6 +378,9 @@ namespace lsp
 
                     case UIE_HIDE:
                     {
+                        if (bWrapper)
+                            break;
+
                         // Drop previously existed drawing surface
                         drop_surface();
                         break;
@@ -291,9 +388,9 @@ namespace lsp
 
                     case UIE_REDRAW:
                     {
-                        lsp_trace("redraw location = %d x %d, size = %d x %d",
-                                int(ev->nLeft), int(ev->nTop),
-                                int(ev->nWidth), int(ev->nHeight));
+//                        lsp_trace("redraw location = %d x %d, size = %d x %d",
+//                                int(ev->nLeft), int(ev->nTop),
+//                                int(ev->nWidth), int(ev->nHeight));
                         break;
                     }
 
@@ -307,6 +404,9 @@ namespace lsp
 
                     case UIE_RESIZE:
                     {
+                        if (bWrapper)
+                            break;
+
                         lsp_trace("new window location = %d x %d, size = %d x %d",
                                 int(ev->nLeft), int(ev->nTop),
                                 int(ev->nWidth), int(ev->nHeight));
@@ -442,6 +542,8 @@ namespace lsp
                         break;
 
                     case BS_COMBO:
+                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_MENU;
+                        atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_POPUP_MENU;
                         atoms[n_items++] = a.X11__NET_WM_WINDOW_TYPE_COMBO;
                         break;
 
@@ -651,13 +753,13 @@ namespace lsp
 
                 int x, y;
                 Window child;
-                XWindowAttributes xwa;
                 Display *dpy = pX11Display->x11display();
-                XGetWindowAttributes(dpy, hWindow, &xwa);
-                XTranslateCoordinates(dpy, hWindow, xwa.root, 0, 0, &x, &y, &child);
+                // We do not trust XGetWindowAttributes since it can always return (0, 0) coordinates
+                XTranslateCoordinates(dpy, hWindow, pX11Display->hRootWnd, 0, 0, &x, &y, &child);
+                lsp_trace("xy = {%d, %d}", int(x), int(y));
 
-                realize->nLeft      = x - xwa.x;
-                realize->nTop       = y - xwa.y;
+                realize->nLeft      = x;
+                realize->nTop       = y;
                 realize->nWidth     = sSize.nWidth;
                 realize->nHeight    = sSize.nHeight;
 
@@ -668,8 +770,6 @@ namespace lsp
             {
                 if (hWindow == 0)
                     return STATUS_BAD_STATE;
-                if (pSurface == NULL)
-                    return STATUS_OK;
 
                 Display *dpy = pX11Display->x11display();
                 if (nFlags & F_GRABBING)
@@ -683,8 +783,27 @@ namespace lsp
                     nFlags &= ~F_LOCKING;
                 }
 
-                XUnmapWindow(dpy, hWindow);
+                if (pSurface != NULL)
+                    ::XUnmapWindow(dpy, hWindow);
+
                 pX11Display->flush();
+                return STATUS_OK;
+            }
+
+            status_t X11Window::ungrab_events()
+            {
+                if (!(nFlags & F_GRABBING))
+                    return STATUS_NO_GRAB;
+                return pX11Display->ungrab_events(this);
+            }
+
+            status_t X11Window::grab_events(grab_t group)
+            {
+                if (!(nFlags & F_GRABBING))
+                {
+                    pX11Display->grab_events(this, group);
+                    nFlags |= F_GRABBING;
+                }
                 return STATUS_OK;
             }
 
@@ -695,15 +814,19 @@ namespace lsp
                 if (pSurface != NULL)
                     return STATUS_OK;
 
+                ::Window transient_for = None;
                 X11Window *wnd = NULL;
                 if (over != NULL)
                 {
                     wnd = static_cast<X11Window *>(over);
                     if (wnd->hWindow > 0)
-                        XSetTransientForHint(pX11Display->x11display(), hWindow, wnd->hWindow);
+                        transient_for = wnd->hWindow;
                 }
 
-                XMapWindow(pX11Display->x11display(), hWindow);
+                lsp_trace("Showing window %lx as transient for %lx", hWindow, transient_for);
+                ::XSetTransientForHint(pX11Display->x11display(), hWindow, transient_for);
+                ::XRaiseWindow(pX11Display->x11display(), hWindow);
+                ::XMapWindow(pX11Display->x11display(), hWindow);
                 pX11Display->flush();
 //                XWindowAttributes atts;
 //                XGetWindowAttributes(pX11Display->x11display(), hWindow, &atts);
@@ -720,8 +843,8 @@ namespace lsp
                 {
                     case BS_POPUP:
                     case BS_COMBO:
-                        pX11Display->grab_events(this);
-                        nFlags |= F_GRABBING;
+//                        pX11Display->grab_events(this);
+//                        nFlags |= F_GRABBING;
                         break;
                     case BS_DIALOG:
                         if (wnd != NULL)
@@ -846,29 +969,47 @@ namespace lsp
             }
 
 
-            status_t X11Window::set_caption(const char *text)
+            status_t X11Window::set_caption(const char *ascii, const char *utf8)
             {
+                if (ascii == NULL)
+                    return STATUS_BAD_ARGUMENTS;
+                if (hWindow == None)
+                    return STATUS_OK;
+
+                if (utf8 == NULL)
+                    utf8 = ascii;
+
                 const x11_atoms_t &a = pX11Display->atoms();
 
-                XChangeProperty(
+                ::XChangeProperty(
+                    pX11Display->x11display(),
+                    hWindow,
+                    a.X11_XA_WM_NAME,
+                    a.X11_XA_STRING,
+                    8,
+                    PropModeReplace,
+                    reinterpret_cast<const unsigned char *>(ascii),
+                    ::strlen(ascii)
+                );
+                ::XChangeProperty(
                     pX11Display->x11display(),
                     hWindow,
                     a.X11__NET_WM_NAME,
                     a.X11_UTF8_STRING,
                     8,
                     PropModeReplace,
-                    reinterpret_cast<const unsigned char *>(text),
-                    strlen(text)
+                    reinterpret_cast<const unsigned char *>(utf8),
+                    ::strlen(utf8)
                 );
-                XChangeProperty(
+                ::XChangeProperty(
                     pX11Display->x11display(),
                     hWindow,
                     a.X11__NET_WM_ICON_NAME,
                     a.X11_UTF8_STRING,
                     8,
                     PropModeReplace,
-                    reinterpret_cast<const unsigned char *>(text),
-                    strlen(text)
+                    reinterpret_cast<const unsigned char *>(utf8),
+                    ::strlen(utf8)
                 );
 
                 pX11Display->flush();
@@ -1058,6 +1199,57 @@ namespace lsp
             mouse_pointer_t X11Window::get_mouse_pointer()
             {
                 return enPointer;
+            }
+
+            status_t X11Window::set_class(const char *instance, const char *wclass)
+            {
+                if ((instance == NULL) || (wclass == NULL))
+                    return STATUS_BAD_ARGUMENTS;
+
+                size_t l1 = ::strlen(instance);
+                size_t l2 = ::strlen(wclass);
+
+                char *dup = reinterpret_cast<char *>(::malloc((l1 + l2 + 2) * sizeof(char)));
+                if (dup == NULL)
+                    return STATUS_NO_MEM;
+
+                ::memcpy(dup, instance, l1+1);
+                ::memcpy(&dup[l1+1], wclass, l2+1);
+
+                const x11_atoms_t &a = pX11Display->atoms();
+                ::XChangeProperty(
+                    pX11Display->x11display(),
+                    hWindow,
+                    a.X11_XA_WM_CLASS,
+                    a.X11_XA_STRING,
+                    8,
+                    PropModeReplace,
+                    reinterpret_cast<unsigned char *>(dup),
+                    (l1 + l2 + 2)
+                );
+
+                ::free(dup);
+                return STATUS_OK;
+            }
+
+            status_t X11Window::set_role(const char *wrole)
+            {
+                if (wrole == NULL)
+                    return STATUS_BAD_ARGUMENTS;
+
+                const x11_atoms_t &a = pX11Display->atoms();
+                ::XChangeProperty(
+                    pX11Display->x11display(),
+                    hWindow,
+                    a.X11_WM_WINDOW_ROLE,
+                    a.X11_XA_STRING,
+                    8,
+                    PropModeReplace,
+                    reinterpret_cast<const unsigned char *>(wrole),
+                    ::strlen(wrole)
+                );
+
+                return STATUS_OK;
             }
         }
     } /* namespace ws */

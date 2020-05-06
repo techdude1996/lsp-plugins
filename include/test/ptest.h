@@ -8,12 +8,12 @@
 #ifndef TEST_PTEST_H_
 #define TEST_PTEST_H_
 
-#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
 #include <core/types.h>
+#include <core/stdlib/stdio.h>
 #include <data/cstorage.h>
 #include <test/test.h>
 
@@ -24,6 +24,9 @@
             using namespace ::test; \
             \
             class ptest_ ## name: public PerformanceTest { \
+                public: \
+                    typedef ptest_ ## name test_type_t; \
+                \
                 public: \
                     explicit ptest_ ## name() : PerformanceTest(group, #name, time, iterations) {} \
                     \
@@ -43,7 +46,7 @@
         wsize_t __iterations = 0; \
         \
         do { \
-            for (size_t i=0; i<__test_iterations; ++i) { \
+            for (size_t __i=0; __i<__test_iterations; ++__i) { \
                 __VA_ARGS__; \
             } \
             /* Calculate statistics */ \
@@ -67,7 +70,7 @@
         wsize_t __k_iterations = __test_iterations; \
         \
         do { \
-            for (size_t i=0; i<__k_iterations; ++i) { \
+            for (size_t __i=0; __i<__k_iterations; ++__i) { \
                 __VA_ARGS__; \
             } \
             /* Calculate statistics */ \
@@ -144,6 +147,9 @@ namespace test
             static void destroy_stats(stats_t *stats);
             static void estimate(size_t *len, const char *text);
             static void out_text(FILE *out, size_t length, const char *text, int align, const char *padding, const char *tail);
+
+        public:
+            int             printf(const char *fmt, ...);
 
         public:
             explicit PerformanceTest(const char *group, const char *name, float time, size_t iterations);

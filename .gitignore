@@ -2,7 +2,10 @@
 /.settings/*
 /design/*
 /res/specs/*
+/.builconfig/*
 /.build/*
+/.buildconfig/*
+/.test/*
 /.release/*
 /test/im_reverbs/*
 /design/articles/*
@@ -20,4 +23,8 @@
 /Release AVX/
 *.log
 /gmon.out
-*.svg
+**/*.gmon
+*.core
+*vgcore*
+*perf.data*
+

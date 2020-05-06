@@ -7,7 +7,7 @@
 
 #include <dsp/bits.h>
 
-#if !defined(ARCH_ARM)
+#if (!defined(ARCH_ARM)) && (!defined(ARCH_AARCH64))
     const uint8_t    __rb[] =
     {
         0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
@@ -29,3 +29,12 @@
     };
 
 #endif /* ARCH_ARM */
+
+#if (!defined(ARCH_ARM7))
+    const uint32_t __rb_masks[] =
+    {
+        0x55555555,
+        0x33333333,
+        0x0f0f0f0f
+    };
+#endif /* ARCH_ARM7 */

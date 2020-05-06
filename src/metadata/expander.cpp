@@ -14,38 +14,38 @@ namespace lsp
 {
     //-------------------------------------------------------------------------
     // Expander
-    static const int expander_classes[] = { C_DYNAMICS, C_EXPANDER, -1 };
+    static const int expander_classes[] = { C_EXPANDER, -1 };
 
-    static const char *exp_sc_modes[] =
+    static const port_item_t exp_sc_modes[] =
     {
-        "Peak",
-        "RMS",
-        "Low-Pass",
-        "Uniform",
-        NULL
+        { "Peak",       "sidechain.peak"           },
+        { "RMS",        "sidechain.rms"            },
+        { "Low-Pass",   "sidechain.lowpass"        },
+        { "Uniform",    "sidechain.uniform"        },
+        { NULL, NULL }
     };
 
-    static const char *exp_sc_sources[] =
+    static const port_item_t exp_sc_sources[] =
     {
-        "Middle",
-        "Side",
-        "Left",
-        "Right",
-        NULL
+        { "Middle",     "sidechain.middle" },
+        { "Side",       "sidechain.side" },
+        { "Left",       "sidechain.left" },
+        { "Right",      "sidechain.right" },
+        { NULL, NULL }
     };
 
-    static const char *exp_modes[] =
+    static const port_item_t exp_sc_type[] =
     {
-        "Down",
-        "Up",
-        NULL
+        { "Internal",   "sidechain.internal" },
+        { "External",   "sidechain.external" },
+        { NULL, NULL }
     };
 
-    static const char *exp_sc_type[] =
+    static const port_item_t exp_modes[] =
     {
-        "Internal",
-        "External",
-        NULL
+        { "Down",       "expander.down_ward" },
+        { "Up",         "expander.up_ward" },
+        { NULL, NULL }
     };
 
     #define EXP_COMMON     \
@@ -88,7 +88,7 @@ namespace lsp
         LOG_CONTROL("at" id, "Attack time" label, U_MSEC, expander_base_metadata::ATTACK_TIME), \
         LOG_CONTROL("rrl" id, "Relative release level" label, U_GAIN_AMP, expander_base_metadata::RELEASE_LVL), \
         LOG_CONTROL("rt" id, "Release time" label, U_MSEC, expander_base_metadata::RELEASE_TIME), \
-        LOG_CONTROL("cr" id, "Ratio" label, U_NONE, expander_base_metadata::RATIO), \
+        LOG_CONTROL("er" id, "Ratio" label, U_NONE, expander_base_metadata::RATIO), \
         LOG_CONTROL("kn" id, "Knee" label, U_GAIN_AMP, expander_base_metadata::KNEE), \
         LOG_CONTROL("mk" id, "Makeup gain" label, U_GAIN_AMP, expander_base_metadata::MAKEUP), \
         AMP_GAIN10("cdr" id, "Dry gain" label, GAIN_AMP_M_INF_DB),     \
@@ -232,8 +232,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 0,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         expander_mono_ports,
         "dynamics/expander/single/mono.xml",
+        NULL,
         mono_plugin_port_groups
     };
 
@@ -248,8 +250,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 1,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         expander_stereo_ports,
         "dynamics/expander/single/stereo.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -264,8 +268,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 2,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         expander_lr_ports,
         "dynamics/expander/single/lr.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -280,8 +286,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 3,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         expander_ms_ports,
         "dynamics/expander/single/ms.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -297,8 +305,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 4,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         sc_expander_mono_ports,
         "dynamics/expander/single/mono.xml",
+        NULL,
         mono_plugin_sidechain_port_groups
     };
 
@@ -313,8 +323,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 5,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         sc_expander_stereo_ports,
         "dynamics/expander/single/stereo.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 
@@ -329,8 +341,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 6,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         sc_expander_lr_ports,
         "dynamics/expander/single/lr.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 
@@ -345,8 +359,10 @@ namespace lsp
         LSP_EXPANDER_BASE + 7,
         LSP_VERSION(1, 0, 1),
         expander_classes,
+        E_INLINE_DISPLAY,
         sc_expander_ms_ports,
         "dynamics/expander/single/ms.xml",
+        NULL,
         stereo_plugin_sidechain_port_groups
     };
 }

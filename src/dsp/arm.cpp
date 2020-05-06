@@ -5,8 +5,9 @@
  *      Author: sadko
  */
 
-#include <dsp/types.h>
 #include <dsp/dsp.h>
+
+#ifdef ARCH_ARM
 #include <test/test.h>
 
 #include <stdio.h>
@@ -57,6 +58,7 @@ namespace arm
         { 0xc07, "Cortex-A7" },
         { 0xc08, "Cortex-A8" },
         { 0xc09, "Cortex-A9" },
+        { 0xc0d, "Cortex-A12" },
         { 0xc0e, "Cortex-A17" },
         { 0xc0f, "Cortex-A15" },
         { 0xc14, "Cortex-R4" },
@@ -78,11 +80,11 @@ namespace arm
         { 0xd07, "Cortex-A57" },
         { 0xd08, "Cortex-A72" },
         { 0xd09, "Cortex-A73" },
-        { 0xd0a, "Cortex‑A75" },
-        { 0xd13, "Cortex‑R52" },
+        { 0xd0a, "Cortex-A75" },
+        { 0xd13, "Cortex-R52" },
 
-        { 0xd20, "Cortex‑M23" },
-        { 0xd21, "Cortex‑M33" }
+        { 0xd20, "Cortex-M23" },
+        { 0xd21, "Cortex-M33" }
     };
 
     static const feature_t cpu_features[] =
@@ -114,8 +116,8 @@ IF_ARCH_ARM(
 
     const char *find_cpu_name(uint32_t id)
     {
-        ssize_t first = 0, last = sizeof(cpu_parts) / sizeof(cpu_part_t);
-        while (first < last)
+        ssize_t first = 0, last = (sizeof(cpu_parts) / sizeof(cpu_part_t)) - 1;
+        while (first <= last)
         {
             ssize_t mid     = (first + last) >> 1;
             uint32_t xmid   = cpu_parts[mid].id;
@@ -139,7 +141,15 @@ IF_ARCH_ARM(
         f->variant          = 0;
         f->part             = 0;
         f->revision         = 0;
+        f->hwcap            = 0;
+
+        #if defined(PLATFORM_LINUX)
         f->hwcap            = getauxval(AT_HWCAP);
+        #elif defined(PLATFORM_BSD)
+        unsigned long __hwcap = 0;
+        if (elf_aux_info(AT_HWCAP, &__hwcap, sizeof(__hwcap)) == 0)
+            f->hwcap            = __hwcap;
+        #endif
 
         // Read /proc/cpuinfo
         FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
@@ -260,9 +270,9 @@ IF_ARCH_ARM(
 
         const char *cpu = find_cpu_name(f.part);
         char *model     = NULL;
-        asprintf(&model, "vendor=0x%x, architecture=%d, variant=%d, part=0x%x, revision=%d",
+        int n = asprintf(&model, "vendor=0x%x, architecture=%d, variant=%d, part=0x%x, revision=%d",
                 int(f.implementer), int(f.architecture), int(f.variant), int(f.part), int(f.revision));
-        if (model == NULL)
+        if ((n < 0) || (model == NULL))
             return NULL;
 
         size_t size     = sizeof(dsp::info_t);
@@ -314,7 +324,9 @@ IF_ARCH_ARM(
         // Export functions
         EXPORT1(info);
 
+        // Initialize support of NEON functions with D-32 registers
         neon_d32::dsp_init(&f);
-
     }
 }
+
+#endif /* ARCH_ARM */

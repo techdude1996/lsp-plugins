@@ -13,100 +13,106 @@ namespace lsp
 {
     //-------------------------------------------------------------------------
     // Spectrum analyser: x1, x8, x12, x16, x24, x32
-    static const int spectrum_analyzer_classes[] = { C_ANALYSER, C_UTILITY, C_SPECTRAL, -1 };
+    static const int spectrum_analyzer_classes[] = { C_ANALYSER, -1 };
 
-    static const char *fft_tolerance[] =
+    #define R(x) { x, NULL }
+
+    static const port_item_t fft_tolerance[] =
     {
-        "1024",
-        "2048",
-        "4096",
-        "8192",
-        "16384",
+        { "1024", NULL },
+        { "2048", NULL },
+        { "4096", NULL },
+        { "8192", NULL },
+        { "16384", NULL },
+        { NULL, NULL }
+    };
+
+    static const port_item_t spectrum_analyzer_x1_channels[]=
+    {
+        R("0"),
+        { NULL, NULL }
+    };
+
+    static const port_item_t spectrum_analyzer_x1_modes[]=
+    {
+        { "Analyzer",       "spectrum.analyzer" },
+        { "Mastering",      "spectrum.mastering" },
+        { "Spectralizer",   "spectrum.spectralizer" },
         NULL
     };
 
-    static const char *spectrum_analyzer_x1_channels[]=
+    static const port_item_t spectrum_analyzer_x2_channels[]=
     {
-        "0",
-        NULL
+        R("0"),
+        R("1"),
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x1_modes[]=
+    static const port_item_t spectrum_analyzer_x2_modes[]=
     {
-        "Analyzer",
-        "Mastering",
-        "Spectralizer",
-        NULL
+        { "Analyzer",           "spectrum.analyzer" },
+        { "Mastering",          "spectrum.mastering" },
+        { "Spectralizer",       "spectrum.spectralizer" },
+        { "Spectralizer Stereo", "spectrum.spectralizer_s" },
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x2_channels[]=
+    static const port_item_t spectrum_analyzer_x4_channels[]=
     {
-        "0",
-        "1",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x2_modes[]=
+    static const port_item_t spectrum_analyzer_x4_modes[]=
     {
-        "Analyzer",
-        "Mastering",
-        "Spectralizer",
-        "Spectralizer Stereo",
-        NULL
+        { "Analyzer",           "spectrum.analyzer" },
+        { "Analyzer Stereo",    "spectrum.analyzer_s" },
+        { "Mastering",          "spectrum.mastering" },
+        { "Mastering Stereo",   "spectrum.mastering_s" },
+        { "Spectralizer",       "spectrum.spectralizer" },
+        { "Spectralizer Stereo", "spectrum.spectralizer_s" },
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x4_channels[]=
+    static const port_item_t spectrum_analyzer_x8_channels[]=
     {
-        "0", "1", "2", "3",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x4_modes[]=
+    static const port_item_t *spectrum_analyzer_x8_modes = spectrum_analyzer_x4_modes;
+
+    static const port_item_t spectrum_analyzer_x12_channels[]=
     {
-        "Analyzer",
-        "Analyzer Stereo",
-        "Mastering",
-        "Mastering Stereo",
-        "Spectralizer",
-        "Spectralizer Stereo",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        R("8"), R("9"), R("10"), R("11"),
+        { NULL, NULL }
     };
 
-    static const char *spectrum_analyzer_x8_channels[]=
+    static const port_item_t *spectrum_analyzer_x12_modes = spectrum_analyzer_x4_modes;
+
+    static const port_item_t spectrum_analyzer_x16_channels[]=
     {
-        "0", "1", "2", "3", "4", "5", "6", "7",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        R("8"), R("9"), R("10"), R("11"),
+        R("12"), R("13"), R("14"), R("15"),
+        { NULL, NULL }
     };
 
-    static const char **spectrum_analyzer_x8_modes = spectrum_analyzer_x4_modes;
-
-    static const char *spectrum_analyzer_x12_channels[]=
+    static const port_item_t spectralizer_modes[] =
     {
-        "0", "1", "2", "3", "4", "5", "6", "7",
-        "8", "9", "10", "11",
-        NULL
+        { "Rainbow",    "spectrum.spc.rainbow" },
+        { "Fog",        "spectrum.spc.fog" },
+        { "Color",      "spectrum.spc.color" },
+        { "Lightning",  "spectrum.spc.lightning" },
+        { "Lightness",  "spectrum.spc.lightness" },
+        { NULL, NULL }
     };
 
-    static const char **spectrum_analyzer_x12_modes = spectrum_analyzer_x4_modes;
-
-    static const char *spectrum_analyzer_x16_channels[]=
-    {
-        "0", "1", "2", "3", "4", "5", "6", "7",
-        "8", "9", "10", "11", "12", "13", "14", "15",
-        NULL
-    };
-
-    static const char *spectralizer_modes[] =
-    {
-        "Rainbow",
-        "Fog",
-        "Color",
-        "Lightning",
-        "Lightness",
-        NULL
-    };
-
-    static const char **spectrum_analyzer_x16_modes = spectrum_analyzer_x4_modes;
+    static const port_item_t *spectrum_analyzer_x16_modes = spectrum_analyzer_x4_modes;
 
     #define SA_INPUT(x, total) \
         AUDIO_INPUT_N(x), \
@@ -114,7 +120,7 @@ namespace lsp
         { "on_" #x, "Analyse " #x, U_BOOL, R_CONTROL, F_IN, 0, 0, (x == 0) ? 1.0f : 0.0f, 0, NULL    }, \
         { "solo_" #x, "Solo " #x, U_BOOL, R_CONTROL, F_IN, 0, 0, 0, 0, NULL    }, \
         { "frz_" #x, "Freeze " #x, U_BOOL, R_CONTROL, F_IN, 0, 0, 0, 0, NULL    }, \
-        { "hue_" #x, "Hue " #x, U_NONE, R_CONTROL, F_IN | F_UPPER | F_LOWER | F_STEP, 0.0f, 1.0f, (float(x) / float(total)), 0.25f/360.0f, NULL     }, \
+        { "hue_" #x, "Hue " #x, U_NONE, R_CONTROL, F_IN | F_UPPER | F_LOWER | F_STEP | F_CYCLIC, 0.0f, 1.0f, (float(x) / float(total)), 0.25f/360.0f, NULL     }, \
         AMP_GAIN("sh_" #x, "Shift gain " #x, 1.0f, 1000.0f), \
         MESH("spc_" #x, "Spectrum " #x, 2, spectrum_analyzer_base_metadata::MESH_POINTS)
 
@@ -125,8 +131,8 @@ namespace lsp
         SWITCH("splog", "Spectralizer logarithmic scale", 1), \
         SWITCH("freeze", "Analyzer freeze", 0), \
         { "tol", "FFT Tolerance", U_ENUM, R_CONTROL, F_IN, 0, 0, spectrum_analyzer_base_metadata::RANK_DFL - spectrum_analyzer_base_metadata::RANK_MIN, 0, fft_tolerance }, \
-        { "wnd", "FFT Window", U_ENUM, R_CONTROL, F_IN, 0, 0, spectrum_analyzer_base_metadata::WND_DFL, 0, windows::windows }, \
-        { "env", "FFT Envelope", U_ENUM, R_CONTROL, F_IN, 0, 0, spectrum_analyzer_base_metadata::ENV_DFL, 0, envelope::envelopes }, \
+        { "wnd", "FFT Window", U_ENUM, R_CONTROL, F_IN, 0, 0, spectrum_analyzer_base_metadata::WND_DFL, 0, fft_windows }, \
+        { "env", "FFT Envelope", U_ENUM, R_CONTROL, F_IN, 0, 0, spectrum_analyzer_base_metadata::ENV_DFL, 0, fft_envelopes }, \
         AMP_GAIN("pamp", "Preamp gain", spectrum_analyzer_base_metadata::PREAMP_DFL, 1000.0f), \
         LOG_CONTROL("zoom", "Graph zoom", U_GAIN_AMP, spectrum_analyzer_base_metadata::ZOOM), \
         { "react",          "Reactivity",       U_SEC,          R_CONTROL, F_IN | F_UPPER | F_LOWER | F_STEP | F_LOG, \
@@ -249,10 +255,12 @@ namespace lsp
         "spectrum_analyzer_x1",
         "qtez",
         LSP_SPECTRUM_ANALYZER_BASE + 0,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x1_ports,
         "analyzer/spectrum/x1.xml",
+        NULL,
         NULL
     };
 
@@ -265,10 +273,12 @@ namespace lsp
         "spectrum_analyzer_x2",
         "aw7r",
         LSP_SPECTRUM_ANALYZER_BASE + 1,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x2_ports,
         "analyzer/spectrum/x2.xml",
+        NULL,
         NULL
     };
 
@@ -281,10 +291,12 @@ namespace lsp
         "spectrum_analyzer_x4",
         "xzgo",
         LSP_SPECTRUM_ANALYZER_BASE + 2,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x4_ports,
         "analyzer/spectrum/x4.xml",
+        NULL,
         NULL
     };
 
@@ -297,10 +309,12 @@ namespace lsp
         "spectrum_analyzer_x8",
         "e5hb",
         LSP_SPECTRUM_ANALYZER_BASE + 3,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x8_ports,
         "analyzer/spectrum/x8.xml",
+        NULL,
         NULL
     };
 
@@ -313,10 +327,12 @@ namespace lsp
         "spectrum_analyzer_x12",
         "tj3l",
         LSP_SPECTRUM_ANALYZER_BASE + 4,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x12_ports,
         "analyzer/spectrum/x12.xml",
+        NULL,
         NULL
     };
 
@@ -329,10 +345,12 @@ namespace lsp
         "spectrum_analyzer_x16",
         "nuzi",
         LSP_SPECTRUM_ANALYZER_BASE + 5,
-        LSP_VERSION(1, 0, 2),
+        LSP_VERSION(1, 0, 3),
         spectrum_analyzer_classes,
+        E_INLINE_DISPLAY,
         spectrum_analyzer_x16_ports,
         "analyzer/spectrum/x16.xml",
+        NULL,
         NULL
     };
 }

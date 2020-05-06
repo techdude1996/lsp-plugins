@@ -16,12 +16,14 @@
 // OS-specific windowing system selection
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_BSD)
     #define USE_X11_DISPLAY
+#elif defined(PLATFORM_WINDOWS)
+    #define USE_WINAPI_DISPLAY
 #else
     #error "Unsupported platform"
 #endif
 
-#include <core/io/IInputStream.h>
-#include <core/io/IOutputStream.h>
+#include <core/io/IInStream.h>
+#include <core/io/IOutStream.h>
 
 namespace lsp
 {
@@ -85,6 +87,27 @@ namespace lsp
             MCD_RIGHT           = 4
         };
 
+        /**
+         * Different grab group types,
+         * sorted according to the priority of grab
+         * in ascending order
+         */
+        enum grab_t
+        {
+            GRAB_LOWEST,
+            GRAB_LOW,
+            GRAB_NORMAL,
+            GRAB_HIGH,
+            GRAB_HIGHEST,
+
+            GRAB_DROPDOWN,                  // Dropdown list
+
+            GRAB_MENU,                      // Simple menu
+            GRAB_EXTRA_MENU,                // Menu over menu
+
+            __GRAB_TOTAL
+        };
+
         /** Event processing flags
          *
          */
@@ -94,6 +117,19 @@ namespace lsp
             EVF_HANDLED         = 1 << 0,   // Event has been processed
             EVF_STOP            = 1 << 1,   // Stop further propagation of event to other elements
             EVF_GRAB            = 1 << 2    // Grab all further events first
+        };
+
+        /** Different drag actions
+         *
+         */
+        enum drag_t
+        {
+            DRAG_COPY           = 0,//!< DRAG_COPY
+            DRAG_MOVE           = 1,//!< DRAG_MOVE
+            DRAG_LINK           = 2,//!< DRAG_LINK
+            DRAG_ASK            = 3,//!< DRAG_ASK
+            DRAG_PRIVATE        = 4,//!< DRAG_PRIVATE
+            DRAG_DIRECT_SAVE    = 5 //!< DRAG_DIRECT_SAVE
         };
 
         enum mouse_pointer_t
@@ -159,6 +195,10 @@ namespace lsp
             UIE_CLOSE,
             UIE_FOCUS_IN,
             UIE_FOCUS_OUT,
+
+            UIE_DRAG_ENTER,
+            UIE_DRAG_LEAVE,
+            UIE_DRAG_REQUEST,
 
             UIE_TOTAL,
             UIE_FIRST = UIE_KEY_DOWN,
@@ -321,7 +361,7 @@ namespace lsp
          * @param is clipboard input stream object
          * @return status of operation
          */
-        typedef status_t    (* clipboard_handler_t)(void *arg, status_t s, io::IInputStream *is);
+        typedef status_t    (* clipboard_handler_t)(void *arg, status_t s, io::IInStream *is);
 
         /** Display task identifier
          *
@@ -334,10 +374,12 @@ namespace lsp
 #include <ui/ws/keycodes.h>
 
 // Common definitions
+#include <ui/ws/IDataSink.h>
+#include <ui/ws/IDataSource.h>
 #include <ui/ws/IEventHandler.h>
 #include <ui/ws/ISurface.h>
-#include <ui/ws/IClipboard.h>
 #include <ui/ws/IDisplay.h>
 #include <ui/ws/INativeWindow.h>
+#include <ui/ws/IR3DBackend.h>
 
 #endif /* INCLUDE_UI_WS_WS_H_ */

@@ -16,7 +16,7 @@ namespace lsp
             JACKWrapper        *pWrapper;
 
         public:
-            JACKPort(const port_t *meta, JACKWrapper *w): IPort(meta)
+            explicit JACKPort(const port_t *meta, JACKWrapper *w): IPort(meta)
             {
                 pWrapper        = w;
             }
@@ -45,7 +45,7 @@ namespace lsp
             size_t                  nRows;
 
         public:
-            JACKPortGroup(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKPortGroup(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 nCurrRow            = meta->start;
                 nCols               = port_list_size(meta->members);
@@ -81,29 +81,38 @@ namespace lsp
     class JACKDataPort: public JACKPort
     {
         private:
-            jack_port_t    *pPort;
-            void           *pBuffer;
-            midi_t         *pMidi;
+            jack_port_t    *pPort;              // JACK port descriptor
+            void           *pDataBuffer;        // Real data buffer passed from JACK
+            void           *pBuffer;            // Data buffer
+            midi_t         *pMidi;              // Midi buffer for operating MIDI messages
+            float          *pSanitized;         // Input float data for sanitized buffers
+            size_t          nBufSize;           // Size of sanitized buffer in samples
 
         public:
-            JACKDataPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKDataPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 pPort       = NULL;
+                pDataBuffer = NULL;
                 pBuffer     = NULL;
                 pMidi       = NULL;
+                pSanitized  = NULL;
+                nBufSize    = 0;
             }
 
             virtual ~JACKDataPort()
             {
                 pPort       = NULL;
+                pDataBuffer = NULL;
                 pBuffer     = NULL;
                 pMidi       = NULL;
+                pSanitized  = NULL;
+                nBufSize    = 0;
             };
 
         public:
             virtual void *getBuffer()
             {
-                return (pMidi != NULL) ? pMidi : pBuffer;
+                return pBuffer;
             };
 
             virtual int init()
@@ -120,12 +129,21 @@ namespace lsp
                 if (cl != NULL)
                     jack_port_unregister(cl, pPort);
 
+                if (pSanitized != NULL)
+                {
+                    ::free(pSanitized);
+                    pSanitized = NULL;
+                }
+
                 if (pMidi != NULL)
                 {
                     delete pMidi;
                     pMidi       = NULL;
                 }
-                pPort = NULL;
+
+                pPort       = NULL;
+                nBufSize    = 0;
+
                 return STATUS_OK;
             }
 
@@ -167,6 +185,29 @@ namespace lsp
                 return (pPort != NULL) ? STATUS_OK : STATUS_UNKNOWN_ERR;
             }
 
+            void set_buffer_size(size_t size)
+            {
+                // set_buffer_size should affect only input audio ports currently
+                if ((!IS_IN_PORT(pMetadata)) || (pMidi != NULL))
+                    return;
+
+                // Buffer size has changed?
+                if (nBufSize == size)
+                    return;
+
+                float *buf  = reinterpret_cast<float *>(::realloc(pSanitized, sizeof(float) * size));
+                if (buf == NULL)
+                {
+                    ::free(pSanitized);
+                    pSanitized = NULL;
+                    return;
+                }
+
+                nBufSize    = size;
+                pSanitized  = buf;
+                dsp::fill_zero(pSanitized, nBufSize);
+            }
+
             void report_latency(ssize_t latency)
             {
                 // Only output ports should report latency
@@ -194,38 +235,61 @@ namespace lsp
                     return false;
                 }
 
-                pBuffer     = jack_port_get_buffer(pPort, samples);
+                pDataBuffer = jack_port_get_buffer(pPort, samples);
+                pBuffer     = pDataBuffer;
 
-                if ((pMidi != NULL) && (pBuffer != NULL) && IS_IN_PORT(pMetadata))
+                if (pMidi != NULL)
                 {
-                    // Clear our buffer
-                    pMidi->clear();
-
-                    // Read MIDI events
-                    jack_midi_event_t   midi_event;
-                    midi_event_t        ev;
-
-                    jack_nframes_t event_count = jack_midi_get_event_count(pBuffer);
-                    for (jack_nframes_t i=0; i<event_count; i++)
+                    if ((pBuffer != NULL) && IS_IN_PORT(pMetadata))
                     {
-                        // Read MIDI event
-                        if (jack_midi_event_get(&midi_event, pBuffer, i) != 0)
+                        // Clear our buffer
+                        pMidi->clear();
+
+                        // Read MIDI events
+                        jack_midi_event_t   midi_event;
+                        midi::event_t       ev;
+
+                        jack_nframes_t event_count = jack_midi_get_event_count(pBuffer);
+                        for (jack_nframes_t i=0; i<event_count; i++)
                         {
-                            lsp_warn("Could not fetch MIDI event #%d from JACK port", int(i));
-                            continue;
+                            // Read MIDI event
+                            if (jack_midi_event_get(&midi_event, pBuffer, i) != 0)
+                            {
+                                lsp_warn("Could not fetch MIDI event #%d from JACK port", int(i));
+                                continue;
+                            }
+
+                            // Convert MIDI event
+                            if (midi::decode(&ev, midi_event.buffer) <= 0)
+                            {
+                                lsp_warn("Could not decode MIDI event #%d at timestamp %d from JACK port", int(i), int(midi_event.time));
+                                continue;
+                            }
+
+                            // Update timestamp and store event
+                            ev.timestamp    = midi_event.time;
+                            if (!pMidi->push(ev))
+                                lsp_warn("Could not append MIDI event #%d at timestamp %d due to buffer overflow", int(i), int(midi_event.time));
                         }
 
-                        // Convert MIDI event
-                        if (!decode_midi_message(&ev, midi_event.buffer))
-                        {
-                            lsp_warn("Could not decode MIDI event #%d at timestamp %d from JACK port", int(i), int(midi_event.time));
-                            continue;
-                        }
+                        // All MIDI events ARE ordered chronologically, we do not need to perform sort
+                    }
 
-                        // Update timestamp and store event
-                        ev.timestamp    = midi_event.time;
-                        if (!pMidi->push(ev))
-                            lsp_warn("Could not append MIDI event #%d at timestamp %d due to buffer overflow", int(i), int(midi_event.time));
+                    // Replace pBuffer with pMidi
+                    pBuffer     = pMidi;
+                }
+                else if (pSanitized != NULL) // Need to sanitize?
+                {
+                    // Perform sanitize() if possible
+                    if (samples <= nBufSize)
+                    {
+                        dsp::sanitize2(pSanitized, reinterpret_cast<float *>(pDataBuffer), samples);
+                        pBuffer = pSanitized;
+                    }
+                    else
+                    {
+                        lsp_warn("Could not sanitize buffer data for port %s, not enough buffer size (required: %d, actual: %d)",
+                                pMetadata->id, int(samples), int(nBufSize));
                     }
                 }
 
@@ -234,56 +298,41 @@ namespace lsp
 
             virtual void post_process(size_t samples)
             {
-                if ((pMidi != NULL) && (pBuffer != NULL) && IS_OUT_PORT(pMetadata))
+                if ((pMidi != NULL) && (pDataBuffer != NULL) && IS_OUT_PORT(pMetadata))
                 {
                     // Reset buffer
-                    jack_midi_clear_buffer(pBuffer);
+                    jack_midi_clear_buffer(pDataBuffer);
 
                     // Transfer MIDI events
-                    size_t events = pMidi->nEvents;
-                    if (events > 0)
+                    pMidi->sort();  // All events SHOULD be ordered chonologically
+
+                    // Transmit all events
+                    for (size_t i=0, events=pMidi->nEvents; i<events; ++i)
                     {
-                        // Sort events by their time
-                        if (events > 1)
+                        // Determine size of the message
+                        midi::event_t *ev   = &pMidi->vEvents[i];
+                        ssize_t size        = midi::size_of(ev);
+                        if (size <= 0)
                         {
-                            // Simple bubble sort...
-                            for (size_t i=0; i<(events-1); ++i)
-                                for (size_t j=i+1; j<events; ++j)
-                                    if (pMidi->vEvents[i].timestamp > pMidi->vEvents[j].timestamp)
-                                    {
-                                        midi_event_t tmp    = pMidi->vEvents[i];
-                                        pMidi->vEvents[i]   = pMidi->vEvents[j];
-                                        pMidi->vEvents[j]   = tmp;
-                                    }
+                            lsp_warn("Could not encode output MIDI message of type 0x%02x, timestamp=%d", int(ev->type), int(ev->timestamp));
+                            continue;
                         }
 
-                        // Transport all events
-                        for (size_t i=0; i<events; ++i)
+                        // Allocate MIDI event
+                        jack_midi_data_t *midi_data     = jack_midi_event_reserve(pDataBuffer, ev->timestamp, size);
+                        if (midi_data == NULL)
                         {
-                            // Determine size of the message
-                            midi_event_t *ev    = &pMidi->vEvents[i];
-                            size_t size         = encoded_midi_message_size(ev);
-                            if (size <= 0)
-                            {
-                                lsp_warn("Could not encode output MIDI message of type 0x%02x, timestamp=%d", int(ev->type), int(ev->timestamp));
-                                continue;
-                            }
-
-                            // Allocate MIDI event
-                            jack_midi_data_t *midi_data     = jack_midi_event_reserve(pBuffer, ev->timestamp, size);
-                            if (midi_data == NULL)
-                            {
-                                lsp_warn("Could not write MIDI message of type 0x%02x, timestamp=%d to JACK output port", int(ev->type), int(ev->timestamp));
-                                continue;
-                            }
-
-                            // Encode MIDI event
-                            encode_midi_message(ev, midi_data);
+                            lsp_warn("Could not write MIDI message of type 0x%02x, size=%d, timestamp=%d to JACK output port buffer=%p",
+                                    int(ev->type), int(size), int(ev->timestamp), pBuffer);
+                            continue;
                         }
 
-                        // Cleanup the output buffer
-                        pMidi->clear();
+                        // Encode MIDI event
+                        midi::encode(midi_data, ev);
                     }
+
+                    // Cleanup the output buffer
+                    pMidi->clear();
                 }
 
                 pBuffer     = NULL;
@@ -297,7 +346,7 @@ namespace lsp
             float       fCurrValue;
 
         public:
-            JACKControlPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKControlPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 fNewValue   = meta->start;
                 fCurrValue  = meta->start;
@@ -337,7 +386,7 @@ namespace lsp
             bool        bForce;
 
         public:
-            JACKMeterPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKMeterPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 fValue      = meta->start;
                 bForce      = true;
@@ -384,7 +433,7 @@ namespace lsp
             mesh_t     *pMesh;
 
         public:
-            JACKMeshPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKMeshPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 pMesh   = NULL;
             }
@@ -422,7 +471,7 @@ namespace lsp
             frame_buffer_t      sFB;
 
         public:
-            JACKFrameBufferPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKFrameBufferPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
             }
 
@@ -447,13 +496,50 @@ namespace lsp
             }
     };
 
+    class JACKOscPort: public JACKPort
+    {
+        private:
+            osc_buffer_t     *pFB;
+
+        public:
+            explicit JACKOscPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            {
+                pFB     = NULL;
+            }
+
+            virtual ~JACKOscPort()
+            {
+            }
+
+        public:
+            virtual void *getBuffer()
+            {
+                return pFB;
+            }
+
+            virtual int init()
+            {
+                pFB = osc_buffer_t::create(OSC_BUFFER_MAX);
+                return (pFB == NULL) ? STATUS_NO_MEM : STATUS_OK;
+            }
+
+            virtual void destroy()
+            {
+                if (pFB != NULL)
+                {
+                    osc_buffer_t::destroy(pFB);
+                    pFB     = NULL;
+                }
+            }
+    };
+
     class JACKPathPort: public JACKPort
     {
         private:
             jack_path_t     sPath;
 
         public:
-            JACKPathPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
+            explicit JACKPathPort(const port_t *meta, JACKWrapper *w) : JACKPort(meta, w)
             {
                 sPath.init();
             }

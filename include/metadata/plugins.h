@@ -32,7 +32,9 @@
 #define LSP_LATENCY_METER_BASE          LSP_LADSPA_BASE + 69
 #define LSP_MB_COMPRESSOR_BASE          LSP_LADSPA_BASE + 70
 #define LSP_PROFILER_BASE               LSP_LADSPA_BASE + 78
-#define LSP_NONLINEAR_CONVOLVER_BASE    LSP_LADSPA_BASE + 79
+#define LSP_REVERB_BUILDER_BASE         LSP_LADSPA_BASE + 80
+#define LSP_MB_EXPANDER_BASE            LSP_LADSPA_BASE + 82
+#define LSP_NONLINEAR_CONVOLVER_BASE    LSP_LADSPA_BASE + 86
 
 
 // Plugin metadata definitions
@@ -55,8 +57,10 @@
 #include <metadata/oscillator.h>
 #include <metadata/latency_meter.h>
 #include <metadata/mb_compressor.h>
-
 #include <metadata/profiler.h>
+#include <metadata/room_builder.h>
+#include <metadata/mb_expander.h>
+
 #include <metadata/nonlinear_convolver.h>
 
 #include <metadata/midi_override.h>

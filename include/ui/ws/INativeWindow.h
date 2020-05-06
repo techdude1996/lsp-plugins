@@ -21,8 +21,11 @@ namespace lsp
                 IEventHandler  *pHandler;
                 IDisplay       *pDisplay;
 
+            private:
+                INativeWindow & operator = (const INativeWindow);
+
             public:
-                INativeWindow(IDisplay *dpy, IEventHandler *handler = NULL);
+                explicit INativeWindow(IDisplay *dpy, IEventHandler *handler = NULL);
                 virtual ~INativeWindow();
 
                 /** Window initialization routine
@@ -87,10 +90,11 @@ namespace lsp
 
                 /** Set caption of the window
                  *
-                 * @param text text of the caption
+                 * @param ascii ASCII-encoded caption
+                 * @param utf8 UTF-8-encoded caption
                  * @return status of operation
                  */
-                virtual status_t set_caption(const char *text);
+                virtual status_t set_caption(const char *ascii, const char *utf8);
 
             public:
                 /** Get native handle of the window
@@ -352,20 +356,36 @@ namespace lsp
                  */
                 virtual mouse_pointer_t get_mouse_pointer();
 
-                /** Set the clipboard associated with this window
+                /**
+                 * Grab mouse and keyboard events for the specified group.
+                 * Group declares the set of controls that will receive events only
+                 * when there are no windows with grabbing events in more prioretized group.
                  *
-                 * @param id clipboard identifier
-                 * @param c clipboard
+                 * @param group the group of events to grab
                  * @return status of operation
                  */
-                virtual status_t write_clipboard(size_t id, IClipboard *c);
+                virtual status_t grab_events(grab_t group);
 
-                /** Returns the last clipboard associated with THIS window
-                 *
-                 * @param id clipboard identifier
-                 * @return clipboard object or NULL.
+                /**
+                 * Release grab of events
+                 * @return status of operation
                  */
-                virtual IClipboard *get_clipboard(size_t id);
+                virtual status_t ungrab_events();
+
+                /**
+                 * Set window class
+                 * @param instance window instance, ASCII-string
+                 * @param wclass window class, ASCII-string
+                 * @return status of operation
+                 */
+                virtual status_t set_class(const char *instance, const char *wclass);
+
+                /**
+                 * Set window role
+                 * @param wrole window role, ASCII-string
+                 * @return status of operation
+                 */
+                virtual status_t set_role(const char *wrole);
         };
     } /* namespace ws */
 } /* namespace lsp */

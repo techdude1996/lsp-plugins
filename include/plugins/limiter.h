@@ -36,7 +36,8 @@ namespace lsp
             typedef struct channel_t
             {
                 Bypass          sBypass;            // Bypass
-                Oversampler     sOver;              // Oversampler class
+                Oversampler     sOver;              // Oversampler object for signal
+                Oversampler     sScOver;            // Sidechain oversampler object for signal
                 Limiter         sLimit;             // Limiter
                 MeterGraph      sGraph[G_TOTAL];    // Input meter graph
                 Blink           sBlink;             // Gain blink
@@ -112,9 +113,10 @@ namespace lsp
             static bool get_filtering(size_t mode);
             static limiter_mode_t get_limiter_mode(size_t mode);
             static size_t get_dithering(size_t mode);
+            void sync_latency();
 
         public:
-            limiter_base(const plugin_metadata_t &metadata, bool sc, bool stereo);
+            explicit limiter_base(const plugin_metadata_t &metadata, bool sc, bool stereo);
             virtual ~limiter_base();
 
         public:
@@ -132,25 +134,25 @@ namespace lsp
     class limiter_mono: public limiter_base, public limiter_mono_metadata
     {
         public:
-            limiter_mono();
+            explicit limiter_mono();
     };
 
     class limiter_stereo: public limiter_base, public limiter_stereo_metadata
     {
         public:
-            limiter_stereo();
+            explicit limiter_stereo();
     };
 
     class sc_limiter_mono: public limiter_base, public sc_limiter_mono_metadata
     {
         public:
-            sc_limiter_mono();
+            explicit sc_limiter_mono();
     };
 
     class sc_limiter_stereo: public limiter_base, public sc_limiter_stereo_metadata
     {
         public:
-            sc_limiter_stereo();
+            explicit sc_limiter_stereo();
     };
 
 }

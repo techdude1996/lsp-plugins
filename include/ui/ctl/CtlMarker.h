@@ -14,17 +14,27 @@ namespace lsp
     {
         class CtlMarker: public CtlWidget
         {
+            public:
+                static const ctl_class_t metadata;
+
             protected:
                 CtlPort        *pPort;
                 CtlColor        sColor;
+                CtlExpression   sAngle;
+                CtlExpression   sDX;
+                CtlExpression   sDY;
                 float           fTransparency;
 
             protected:
                 static status_t     slot_change(LSPWidget *sender, void *ptr, void *data);
+                static status_t     slot_graph_resize(LSPWidget *sender, void *ptr, void *data);
+
                 void                submit_values();
+                void                trigger_expr();
+                float               eval_expr(CtlExpression *expr);
 
             public:
-                CtlMarker(CtlRegistry *src, LSPMarker *mark);
+                explicit CtlMarker(CtlRegistry *src, LSPMarker *mark);
                 virtual ~CtlMarker();
 
             public:

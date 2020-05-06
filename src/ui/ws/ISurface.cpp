@@ -88,6 +88,8 @@ namespace lsp
 
         void Font::set(const Font *s)
         {
+            if (sName != NULL)
+                free(sName);
             sName       = (s->sName != NULL) ? strdup(s->sName) : NULL;
             fSize       = s->fSize;
             nFlags      = s->nFlags;
@@ -313,6 +315,14 @@ namespace lsp
         {
         }
 
+        void ISurface::fill_round_frame(
+                float fx, float fy, float fw, float fh,
+                float ix, float iy, float iw, float ih,
+                float radius, size_t flags,
+                const Color &color)
+        {
+        }
+
         void ISurface::fill_poly(const float *x, const float *y, size_t n, const Color & color)
         {
         }
@@ -334,6 +344,14 @@ namespace lsp
         }
 
         void ISurface::fill_circle(float x, float y, float r, IGradient *g)
+        {
+        }
+
+        void ISurface::clip_begin(float x, float y, float w, float h)
+        {
+        }
+
+        void ISurface::clip_end()
         {
         }
     

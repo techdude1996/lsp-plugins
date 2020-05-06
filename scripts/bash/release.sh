@@ -11,7 +11,6 @@ do_release() {
     echo "******************************************************"
 
     $MAKE clean && $MAKE -j$THREADS all && $MAKE release;
-    $MAKE clean && $MAKE -j$THREADS profile && $MAKE release_profile;
 }
 
 echo "******************************************************"
@@ -33,7 +32,14 @@ elif [[ "$ARCH" == "i586" ]]; then
     do_release 'i586'
 elif [[ "$ARCH" == "armv7a" ]]; then
     export THREADS=$((THREADS/2)) # Raspberry may overheat, we use twice lower number of threads
-    do_release 'armv7a'
+    if [[ "$PLATFORM" == "BSD" ]]; then
+        do_release ''
+    else
+        do_release 'armv7a'
+    fi;
+elif [[ "$ARCH" == "aarch64" ]]; then
+    export THREADS=$((THREADS/2)) # Raspberry may overheat, we use twice lower number of threads
+    do_release 'aarch64'
 else
     echo "Don't know how to build release"
 fi

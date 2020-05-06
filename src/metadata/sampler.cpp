@@ -13,58 +13,112 @@ namespace lsp
 {
     //-------------------------------------------------------------------------
     // Sampler
-    static const char *sampler_sample_selectors[] =
+    static const port_item_t sampler_sample_selectors[] =
     {
-        "0", "1", "2", "3",
-        "4", "5", "6", "7",
-        NULL
+        { "0", "sampler.samp.0" },
+        { "1", "sampler.samp.1" },
+        { "2", "sampler.samp.2" },
+        { "3", "sampler.samp.3" },
+        { "4", "sampler.samp.4" },
+        { "5", "sampler.samp.5" },
+        { "6", "sampler.samp.6" },
+        { "7", "sampler.samp.7" },
+        { NULL, NULL }
     };
 
-    static const char *sampler_x12_instruments[] =
+    static const port_item_t mute_groups[] =
     {
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
-        NULL
+        { "None", "sampler.samp.none" },
+        { "A", NULL },
+        { "B", NULL },
+        { "C", NULL },
+        { "D", NULL },
+        { "E", NULL },
+        { "F", NULL },
+        { "G", NULL },
+        { "H", NULL },
+        { "I", NULL },
+        { "J", NULL },
+        { "K", NULL },
+        { "L", NULL },
+        { "M", NULL },
+        { "N", NULL },
+        { "O", NULL },
+        { "P", NULL },
+        { "Q", NULL },
+        { "R", NULL },
+        { "S", NULL },
+        { "T", NULL },
+        { "U", NULL },
+        { "V", NULL },
+        { "W", NULL },
+        { "X", NULL },
+        { "Y", NULL },
+        { "Z", NULL },
+        { NULL, NULL }
     };
 
-    static const char *sampler_x24_instruments[] =
+    #define R(x) { x, "sampler.inst." x }
+    static const port_item_t sampler_x12_instruments[] =
     {
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
-        "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        R("8"), R("9"), R("10"), R("11"),
+        { NULL, NULL }
     };
 
-    static const char *sampler_x48_instruments[] =
+    static const port_item_t sampler_x24_instruments[] =
     {
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
-        "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
-        "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35",
-        "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        R("8"), R("9"), R("10"), R("11"),
+        R("12"), R("13"), R("14"), R("15"),
+        R("16"), R("17"), R("18"), R("19"),
+        R("20"), R("21"), R("22"), R("23"),
+        { NULL, NULL }
     };
 
-    static const char *sampler_x12_mixer_lines[] =
+    static const port_item_t sampler_x48_instruments[] =
     {
-        "Instruments",
-        "Mixer",
-        NULL
+        R("0"), R("1"), R("2"), R("3"),
+        R("4"), R("5"), R("6"), R("7"),
+        R("8"), R("9"), R("10"), R("11"),
+        R("12"), R("13"), R("14"), R("15"),
+        R("16"), R("17"), R("18"), R("19"),
+        R("20"), R("21"), R("22"), R("23"),
+        R("24"), R("25"), R("26"), R("27"),
+        R("28"), R("29"), R("30"), R("31"),
+        R("32"), R("33"), R("34"), R("35"),
+        R("36"), R("37"), R("38"), R("39"),
+        R("40"), R("41"), R("42"), R("43"),
+        R("44"), R("45"), R("46"), R("47"),
+        { NULL, NULL }
+    };
+    #undef R
+
+    static const port_item_t sampler_x12_mixer_lines[] =
+    {
+        { "Instruments", "sampler.instruments" },
+        { "Mixer", "sampler.mixer" },
+        { NULL, NULL }
     };
 
-    static const char *sampler_x24_mixer_lines[] =
+    static const port_item_t sampler_x24_mixer_lines[] =
     {
-        "Instruments",
-        "Mixer 0-11",
-        "Mixer 12-23",
-        NULL
+        { "Instruments", "sampler.instruments" },
+        { "Mixer 0-11", "sampler.mixer_0:11" },
+        { "Mixer 12-23", "sampler.mixer_12:23" },
+        { NULL, NULL }
     };
 
-    static const char *sampler_x48_mixer_lines[] =
+    static const port_item_t sampler_x48_mixer_lines[] =
     {
-        "Instruments",
-        "Mixer 0-11",
-        "Mixer 12-23",
-        "Mixer 24-35",
-        "Mixer 36-47",
-        NULL
+        { "Instruments", "sampler.instruments" },
+        { "Mixer 0-11", "sampler.mixer_0:11" },
+        { "Mixer 12-23", "sampler.mixer_12:23" },
+        { "Mixer 24-35", "sampler.mixer_24:35" },
+        { "Mixer 36-47", "sampler.mixer_36:47" },
+        { NULL, NULL }
     };
 
     #define S_DO_GROUP_PORTS(i) \
@@ -89,17 +143,21 @@ namespace lsp
         WET_GAIN(1.0f),         \
         OUT_GAIN
 
+    #define S_DO_CONTROL \
+        SWITCH("do_gain", "Apply gain to direct-out", 1.0f), \
+        SWITCH("do_pan", "Apply panning to direct-out", 1.0f)
+
     #define S_SAMPLE_FILE(gain)        \
         PATH("sf", "Sample file"), \
         CONTROL("hc", "Sample head cut", U_MSEC, sampler_kernel_metadata::SAMPLE_LENGTH), \
-        CONTROL("tc", "Sample tail cut", U_MSEC, sampler_kernel_metadata::SAMPLE_LENGTH), \
+    	CONTROL("tc", "Sample tail cut", U_MSEC, sampler_kernel_metadata::SAMPLE_LENGTH), \
         CONTROL("fi", "Sample fade in", U_MSEC, sampler_kernel_metadata::SAMPLE_LENGTH), \
         CONTROL("fo", "Sample fade out", U_MSEC, sampler_kernel_metadata::SAMPLE_LENGTH), \
         AMP_GAIN10("mk", "Sample makeup gain", 1.0f), \
         { "vl", "Sample velocity max",  U_PERCENT, R_CONTROL, F_IN | F_LOWER | F_UPPER | F_STEP | F_LOWERING, 0.0f, 100.0f, 0.0f, 0.05, NULL }, \
         { "pd", "Sample pre-delay",  U_MSEC, R_CONTROL, F_IN | F_LOWER | F_UPPER | F_STEP, \
                 sampler_kernel_metadata::PREDELAY_MIN, sampler_kernel_metadata::PREDELAY_MAX, 0, sampler_kernel_metadata::PREDELAY_STEP, NULL }, \
-        { "on", "Sample enabled", U_BOOL, R_CONTROL, F_IN, 0, 0, 1.0f, 0, NULL }, \
+        SWITCH("on", "Sample enabled", 1.0f), \
         TRIGGER("ls", "Sample listen"), \
         gain, \
         BLINK("ac", "Sample activity"), \
@@ -109,10 +167,23 @@ namespace lsp
         STATUS("fs", "Sample load status"), \
         MESH("fd", "Sample file contents", sampler_kernel_metadata::TRACKS_MAX, sampler_kernel_metadata::MESH_SIZE)
 
-    #define S_INSTRUMENT(sample)            \
-        COMBO("chan", "Channel", midi_trigger_kernel_metadata::CHANNEL_DFL, midi_channels), \
-        COMBO("note", "Note", midi_trigger_kernel_metadata::NOTE_DFL, notes), \
-        COMBO("oct", "Octave", midi_trigger_kernel_metadata::OCTAVE_DFL, octaves), \
+    #define S_INSTRUMENT(sample)    \
+        COMBO("chan", "Channel", sampler_kernel_metadata::CHANNEL_DFL, midi_channels), \
+        COMBO("note", "Note", sampler_kernel_metadata::NOTE_DFL, notes), \
+        COMBO("oct", "Octave", sampler_kernel_metadata::OCTAVE_DFL, octaves), \
+        { "mn", "MIDI Note #", U_NONE, R_METER, F_OUT | F_LOWER | F_UPPER | F_INT, 0, 127, 0, 0, NULL }, \
+        TRIGGER("trg", "Instrument listen"), \
+        CONTROL("dyna", "Dynamics", U_PERCENT, sampler_base_metadata::DYNA), \
+        CONTROL("drft", "Time drifting", U_MSEC, sampler_base_metadata::DRIFT), \
+        PORT_SET("ssel", "Sample selector", sampler_sample_selectors, sample)
+
+    #define S_MG_INSTRUMENT(sample)    \
+        COMBO("chan", "Channel", sampler_kernel_metadata::CHANNEL_DFL, midi_channels), \
+        COMBO("note", "Note", sampler_kernel_metadata::NOTE_DFL, notes), \
+        COMBO("oct", "Octave", sampler_kernel_metadata::OCTAVE_DFL, octaves), \
+        COMBO("mgrp", "Mute Group", 0, mute_groups), \
+        SWITCH("mtg", "Mute on stop", 0.0f), \
+        SWITCH("nto", "Note-off handling", 0.0f), \
         { "mn", "MIDI Note #", U_NONE, R_METER, F_OUT | F_LOWER | F_UPPER | F_INT, 0, 127, 0, 0, NULL }, \
         TRIGGER("trg", "Instrument listen"), \
         CONTROL("dyna", "Dynamics", U_PERCENT, sampler_base_metadata::DYNA), \
@@ -123,7 +194,7 @@ namespace lsp
         COMBO("msel", "Area selector", 0, list)
 
     #define S_INSTRUMENT_SELECTOR(list)     \
-        PORT_SET("inst", "Instrument selector", list, sampler_instrument_ports)
+        PORT_SET("inst", "Instrument selector", list, sampler_multiple_ports)
 
     #define S_MIXER(id)                      \
         SWITCH("ion_" #id, "Instrument on " #id, 1.0f), \
@@ -307,13 +378,13 @@ namespace lsp
         PORTS_END
     };
 
-    static const port_t sampler_instrument_ports[] =
+    static const port_t sampler_multiple_ports[] =
     {
-        S_INSTRUMENT(sample_file_stereo_ports),
+        S_MG_INSTRUMENT(sample_file_stereo_ports),
         PORTS_END
     };
 
-    static const int sampler_classes[] = { C_INSTRUMENT, C_SIMULATOR, -1 };
+    static const int sampler_classes[] = { C_INSTRUMENT, -1 };
 
     // Define port lists for each plugin
     static const port_t sampler_mono_ports[] =
@@ -458,6 +529,7 @@ namespace lsp
         PORTS_STEREO_PLUGIN,
         PORTS_MIDI_CHANNEL,
         S_PORTS_GLOBAL,
+        S_DO_CONTROL,
         S_AREA_SELECTOR(sampler_x12_mixer_lines),
         S_INSTRUMENT_SELECTOR(sampler_x12_instruments),
         S_DIRECT_OUT(0),
@@ -481,6 +553,7 @@ namespace lsp
         PORTS_STEREO_PLUGIN,
         PORTS_MIDI_CHANNEL,
         S_PORTS_GLOBAL,
+        S_DO_CONTROL,
         S_AREA_SELECTOR(sampler_x24_mixer_lines),
         S_INSTRUMENT_SELECTOR(sampler_x24_instruments),
         S_DIRECT_OUT(0),
@@ -516,6 +589,7 @@ namespace lsp
         PORTS_STEREO_PLUGIN,
         PORTS_MIDI_CHANNEL,
         S_PORTS_GLOBAL,
+        S_DO_CONTROL,
         S_AREA_SELECTOR(sampler_x48_mixer_lines),
         S_INSTRUMENT_SELECTOR(sampler_x48_instruments),
         S_DIRECT_OUT(0),
@@ -581,10 +655,12 @@ namespace lsp
         "sampler_mono",
         "ca4r",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_mono_ports,
         "sampling/single/mono.xml",
+        NULL,
         mono_plugin_port_groups
     };
 
@@ -597,10 +673,12 @@ namespace lsp
         "sampler_stereo",
         "kjw3",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_stereo_ports,
         "sampling/single/stereo.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -613,10 +691,12 @@ namespace lsp
         "multisampler_x12",
         "clrs",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x12_ports,
         "sampling/multiple/x12.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -629,10 +709,12 @@ namespace lsp
         "multisampler_x24",
         "visl",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x24_ports,
         "sampling/multiple/x24.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -645,10 +727,12 @@ namespace lsp
         "multisampler_x48",
         "hnj4",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x48_ports,
         "sampling/multiple/x48.xml",
+        NULL,
         stereo_plugin_port_groups
     };
 
@@ -661,10 +745,12 @@ namespace lsp
         "multisampler_x12_do",
         "7zkj",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x12_do_ports,
         "sampling/multiple/x12_do.xml",
+        NULL,
         sampler_x12_port_groups
     };
 
@@ -677,10 +763,12 @@ namespace lsp
         "multisampler_x24_do",
         "vimj",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x24_do_ports,
         "sampling/multiple/x24_do.xml",
+        NULL,
         sampler_x24_port_groups
     };
 
@@ -693,10 +781,12 @@ namespace lsp
         "multisampler_x48_do",
         "blyi",
         0,
-        LSP_VERSION(1, 0, 1),
+        LSP_VERSION(1, 0, 2),
         sampler_classes,
+        E_NONE,
         sampler_x48_do_ports,
         "sampling/multiple/x48_do.xml",
+        NULL,
         sampler_x48_port_groups
     };
 

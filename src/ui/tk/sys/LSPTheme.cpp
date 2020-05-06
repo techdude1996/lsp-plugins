@@ -28,10 +28,46 @@ namespace lsp
             pFont->set_bold(false);
             pFont->set_italic(false);
             pFont->color()->set_rgb(1.0f, 1.0f, 1.0f);
+
+            // Initialize root style
+            sStyle.init();
+            ui_atom_t lang = dpy->atom_id("language");
+            if (lang >= 0)
+                sStyle.set_string(lang, "us");
+            sBgColor.bind(dpy, &sStyle, "bg_color");
+            sGlassColor.bind(dpy, &sStyle, "glass_color");
+            sHoleColor.bind(dpy, &sStyle, "hole_color");
+            sBrightness.bind(dpy, &sStyle, "brightness");
+        }
+
+        status_t LSPTheme::after_load()
+        {
+            font_parameters_t fp;
+
+            // Initialize default root style settings
+            get_color(C_BACKGROUND, &sBgColor);
+            get_color(C_GLASS, &sGlassColor);
+            get_color(C_HOLE, &sHoleColor);
+            sBrightness.set(1.0f); // Normal brightness
+
+            get_color(C_LABEL_TEXT, pFont->color());
+            pFont->get_parameters(&fp); // Cache font parameters for further use
+
+            return STATUS_OK;
         }
 
         LSPTheme::~LSPTheme()
         {
+            // Destroy style bindings
+            sBgColor.unbind();
+            sGlassColor.unbind();
+            sHoleColor.unbind();
+            sBrightness.unbind();
+
+            // Destroy root style
+            sStyle.destroy();
+
+            // Destroy color names
             size_t n = sColors.size();
 
             for (size_t i=0; i<n; ++i)
@@ -45,6 +81,13 @@ namespace lsp
             }
 
             sColors.flush();
+
+            // Destroy font
+            if (pFont != NULL)
+            {
+                delete pFont;
+                pFont = NULL;
+            }
         }
 
         bool LSPTheme::find_color(const char *name, Color *dst)

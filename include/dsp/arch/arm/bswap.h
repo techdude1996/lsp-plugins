@@ -60,12 +60,14 @@ inline double __lsp_forced_inline    byte_swap(double v)
         double d;
     } x;
     #pragma pack(pop)
+    uint32_t tmp;
 
     x.d = v;
     ARCH_ARM_ASM (
-        __ASM_EMIT("rev     %[lo], %[lo]")
-        __ASM_EMIT("rev     %[hi], %[hi]")
-        : [lo] "+r"(x.w.lo), [hi] "+r"(x.w.hi)
+        __ASM_EMIT("rev     %[tmp], %[lo]")
+        __ASM_EMIT("rev     %[lo], %[hi]")
+        __ASM_EMIT("mov     %[hi], %[tmp]")
+        : [lo] "+r"(x.w.lo), [hi] "+r"(x.w.hi), [tmp] "=&r" (tmp)
         : :
     );
     return x.d;
@@ -73,7 +75,7 @@ inline double __lsp_forced_inline    byte_swap(double v)
 
 inline void __lsp_forced_inline    byte_swap(uint16_t *v, size_t n)
 {
-    uint16_t tmp;
+    uint32_t tmp;
     ARCH_ARM_ASM (
         __ASM_EMIT("subs        %[n], #2")
         __ASM_EMIT("blo         2f")
@@ -100,7 +102,7 @@ inline void __lsp_forced_inline    byte_swap(uint16_t *v, size_t n)
 
 inline void __lsp_forced_inline    byte_swap(int16_t *v, size_t n)
 {
-    uint16_t tmp;
+    uint32_t tmp;
     ARCH_ARM_ASM (
         __ASM_EMIT("subs        %[n], #2")
         __ASM_EMIT("blo         2f")
@@ -253,5 +255,27 @@ inline void __lsp_forced_inline    byte_swap(double *v, size_t n)
         : : "cc", "memory"
     );
 }
+
+#if defined(WCHART_16BIT)
+    inline wchar_t __lsp_forced_inline    byte_swap(wchar_t v)
+    {
+        ARCH_ARM_ASM (
+            __ASM_EMIT("rev16   %[v], %[v]")
+            : [v] "+r"(v)
+            : :
+        );
+        return v;
+    }
+#elif defined(WCHART_32BIT)
+    inline wchar_t __lsp_forced_inline    byte_swap(wchar_t v)
+    {
+        ARCH_ARM_ASM (
+            __ASM_EMIT("rev     %[v], %[v]")
+            : [v] "+r"(v)
+            : :
+        );
+        return v;
+    }
+#endif
 
 #endif /* DSP_ARCH_ARM_BSWAP_H_ */

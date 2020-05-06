@@ -9,10 +9,11 @@
 #define PLUGINS_IMPULSE_RESPONSES_H_
 
 #include <core/plugin.h>
-#include <core/IExecutor.h>
+#include <core/ipc/IExecutor.h>
 #include <core/util/Convolver.h>
 #include <core/util/Bypass.h>
 #include <core/util/Delay.h>
+#include <core/util/Toggle.h>
 #include <core/filters/Equalizer.h>
 #include <core/sampling/SamplePlayer.h>
 #include <core/files/AudioFile.h>
@@ -39,8 +40,9 @@ namespace lsp
                 AudioFile      *pCurr;
                 AudioFile      *pSwap;
 
+                Toggle          sListen;                // Listen toggle
                 Sample         *pSwapSample;
-                Sample         *pCurrSample;                                                    // Rendered file sample
+                Sample         *pCurrSample;            // Rendered file sample
                 float          *vThumbs[impulse_responses_base_metadata::TRACKS_MAX];           // Thumbnails
                 float           fNorm;          // Norming factor
                 bool            bRender;        // Flag that indicates that file needs rendering
@@ -102,7 +104,7 @@ namespace lsp
                 IPort          *pFreqGain[impulse_responses_base_metadata::EQ_BANDS];   // Gain for each band of the Equalizer
             } channel_t;
 
-            class IRLoader: public ITask
+            class IRLoader: public ipc::ITask
             {
                 private:
                     impulse_responses_base     *pCore;
@@ -113,10 +115,10 @@ namespace lsp
                     virtual ~IRLoader();
 
                 public:
-                    virtual int run();
+                    virtual status_t run();
             };
 
-            class IRConfigurator: public ITask
+            class IRConfigurator: public ipc::ITask
             {
                 private:
                     reconfig_t                  sReconfig[impulse_responses_base_metadata::TRACKS_MAX];
@@ -127,7 +129,7 @@ namespace lsp
                     virtual ~IRConfigurator();
 
                 public:
-                    virtual int run();
+                    virtual status_t run();
 
                     inline void set_render(size_t idx, bool render)     { sReconfig[idx].bRender    = render; }
                     inline void set_source(size_t idx, size_t source)   { sReconfig[idx].nSource    = source; }
@@ -147,7 +149,7 @@ namespace lsp
             size_t                  nChannels;
             channel_t              *vChannels;
             af_descriptor_t        *vFiles;
-            IExecutor              *pExecutor;
+            ipc::IExecutor         *pExecutor;
             size_t                  nReconfigReq;
             size_t                  nReconfigResp;
             float                   fGain;

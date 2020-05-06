@@ -9,8 +9,8 @@
 
 #include <dsp/dsp.h>
 #include <core/debug.h>
-#include <core/midi.h>
 #include <core/colors.h>
+#include <core/protocol/midi.h>
 #include <core/util/Color.h>
 
 #include <plugins/trigger.h>
@@ -233,7 +233,7 @@ namespace lsp
             return;
 
         // Get executor
-        IExecutor *executor = wrapper->get_executor();
+        ipc::IExecutor *executor = wrapper->get_executor();
 
         // Initialize audio channels
         for (size_t i=0; i<trigger_base_metadata::TRACKS_MAX; ++i)
@@ -548,9 +548,9 @@ namespace lsp
             if (midi != NULL)
             {
                 // Create event
-                midi_event_t ev;
+                midi::event_t ev;
                 ev.timestamp    = timestamp;
-                ev.type         = MIDI_MSG_NOTE_ON;
+                ev.type         = midi::MIDI_MSG_NOTE_ON;
                 ev.channel      = nChannel;
                 ev.note.pitch   = nNote;
                 ev.note.velocity= uint32_t(1 + (level * 126));
@@ -573,9 +573,9 @@ namespace lsp
             if (midi != NULL)
             {
                 // Create event
-                midi_event_t ev;
+                midi::event_t ev;
                 ev.timestamp    = timestamp;
-                ev.type         = MIDI_MSG_NOTE_OFF;
+                ev.type         = midi::MIDI_MSG_NOTE_OFF;
                 ev.channel      = nChannel;
                 ev.note.pitch   = nNote;
                 ev.note.velocity= 0;                        // Velocity is zero now
@@ -585,8 +585,8 @@ namespace lsp
             }
         }
 
-        // Handle Note Off event
-        sKernel.trigger_off(timestamp, level);
+        // Do ont handle Note Off event by sampler because it will cause it to stop sample playback
+        // sKernel.trigger_off(timestamp, level);
     }
 
     void trigger_base::process(size_t samples)
@@ -639,7 +639,7 @@ namespace lsp
             {
                 channel_t *c        = &vChannels[i];
                 ctls[i]             = c->vCtl;
-                dsp::scale3(ctls[i], ins[i], preamp, to_process);
+                dsp::mul_k3(ctls[i], ins[i], preamp, to_process);
                 c->sGraph.process(ctls[i], samples);
             }
 
@@ -808,7 +808,7 @@ namespace lsp
             // Initialize coords
             dsp::fill(b->v[2], width, width);
             dsp::fill(b->v[3], height, width);
-            dsp::scale_add3(b->v[2], b->v[0], dx, width);
+            dsp::fmadd_k3(b->v[2], b->v[0], dx, width);
             dsp::axis_apply_log1(b->v[3], b->v[1], zy, dy, width);
 
             // Draw channel
@@ -826,7 +826,7 @@ namespace lsp
             // Initialize coords
             dsp::fill(b->v[2], width, width);
             dsp::fill(b->v[3], height, width);
-            dsp::scale_add3(b->v[2], b->v[0], dx, width);
+            dsp::fmadd_k3(b->v[2], b->v[0], dx, width);
             dsp::axis_apply_log1(b->v[3], b->v[1], zy, dy, width);
 
             // Draw channel
@@ -844,7 +844,7 @@ namespace lsp
             // Initialize coords
             dsp::fill(b->v[2], width, width);
             dsp::fill(b->v[3], height, width);
-            dsp::scale_add3(b->v[2], b->v[0], dx, width);
+            dsp::fmadd_k3(b->v[2], b->v[0], dx, width);
             dsp::axis_apply_log1(b->v[3], b->v[1], zy, dy, width);
 
             // Draw channel

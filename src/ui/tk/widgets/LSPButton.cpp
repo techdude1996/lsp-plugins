@@ -15,7 +15,9 @@ namespace lsp
 
         LSPButton::LSPButton(LSPDisplay *dpy):
             LSPWidget(dpy),
-            sFont(dpy, this)
+            sColor(this),
+            sFont(this),
+            sTitle(this)
         {
             nWidth      = 18;
             nHeight     = 18;
@@ -41,17 +43,9 @@ namespace lsp
             sFont.init();
             sFont.set_size(12.0f);
 
-            if (pDisplay != NULL)
-            {
-                LSPTheme *theme = pDisplay->theme();
-
-                if (theme != NULL)
-                {
-                    theme->get_color(C_BUTTON_FACE, &sColor);
-                    theme->get_color(C_BACKGROUND, &sBgColor);
-                    theme->get_color(C_BUTTON_TEXT, sFont.color());
-                }
-            }
+            init_color(C_BUTTON_FACE, &sColor);
+            init_color(C_BUTTON_TEXT, sFont.color());
+            sTitle.bind();
 
             ui_handler_id_t id = 0;
             id = sSlots.add(LSPSLOT_CHANGE, slot_on_change, self());
@@ -158,18 +152,6 @@ namespace lsp
                 query_draw();
         }
 
-        void LSPButton::set_color(const Color *c)
-        {
-            sColor.copy(c);
-            query_draw();
-        }
-
-        void LSPButton::set_bg_color(const Color *c)
-        {
-            sBgColor.copy(c);
-            query_draw();
-        }
-
         void LSPButton::set_min_width(size_t value)
         {
             if (nMinWidth == value)
@@ -200,8 +182,13 @@ namespace lsp
             IGradient *gr = NULL;
             size_t pressed = nState;
 
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color color(sColor);
+            color.scale_lightness(brightness());
+
             // Draw background
-            s->fill_rect(0, 0, sSize.nWidth, sSize.nHeight, sBgColor);
+            s->fill_rect(0, 0, sSize.nWidth, sSize.nHeight, bg_color);
 
             // Calculate real boundaries
             ssize_t c_x     = (sSize.nWidth >> 1);
@@ -240,7 +227,7 @@ namespace lsp
             else
                 b_l ++;
 
-            float lightness = sColor.lightness();
+            float lightness = color.lightness();
             if (pressed & S_LED)
             {
                 // Draw light
@@ -251,26 +238,26 @@ namespace lsp
                     ssize_t x_rr = l_rr - 1;
 
                     gr  =  s->linear_gradient(c_x, c_y - b_h, c_x, c_y - b_h - x_rr);
-                    gr->add_color(0.0, sColor, 0.5f);
-                    gr->add_color(1.0, sColor, 1.0f);
+                    gr->add_color(0.0, color, 0.5f);
+                    gr->add_color(1.0, color, 1.0f);
                     s->fill_triangle(c_x - b_w - l_rr, c_y - b_h - l_rr, c_x + b_w + l_rr, c_y - b_h - l_rr, c_x, c_y, gr);
                     delete gr;
 
                     gr  =  s->linear_gradient(c_x, c_y + b_h, c_x, c_y + b_h + x_rr);
-                    gr->add_color(0.0, sColor, 0.5f);
-                    gr->add_color(1.0, sColor, 1.0f);
+                    gr->add_color(0.0, color, 0.5f);
+                    gr->add_color(1.0, color, 1.0f);
                     s->fill_triangle(c_x + b_w + l_rr, c_y + b_h + l_rr, c_x - b_w - l_rr, c_y + b_h + l_rr, c_x, c_y, gr);
                     delete gr;
 
                     gr  =  s->linear_gradient(c_x - b_w, c_y, c_x - b_w - x_rr, c_y);
-                    gr->add_color(0.0, sColor, 0.5f);
-                    gr->add_color(1.0, sColor, 1.0f);
+                    gr->add_color(0.0, color, 0.5f);
+                    gr->add_color(1.0, color, 1.0f);
                     s->fill_triangle(c_x - b_w - l_rr, c_y - b_h - l_rr, c_x - b_w - l_rr, c_y + b_h + l_rr, c_x, c_y, gr);
                     delete gr;
 
                     gr  =  s->linear_gradient(c_x + b_w, c_y, c_x + b_w + x_rr, c_y);
-                    gr->add_color(0.0, sColor, 0.5f);
-                    gr->add_color(1.0, sColor, 1.0f);
+                    gr->add_color(0.0, color, 0.5f);
+                    gr->add_color(1.0, color, 1.0f);
                     s->fill_triangle(c_x + b_w + l_rr, c_y + b_h + l_rr, c_x + b_w + l_rr, c_y - b_h - l_rr, c_x, c_y, gr);
                     delete gr;
                 }
@@ -289,7 +276,7 @@ namespace lsp
                 else
                     gr = s->radial_gradient(c_x + b_w, c_y - b_h, b_rad * 0.25f, c_x + b_w, c_y - b_h, b_rad * 3.0f);
 
-                Color cl(sColor);
+                Color cl(color);
                 cl.lightness(bright);
                 gr->add_color(0.0f, cl);
                 cl.darken(0.9f);
@@ -308,7 +295,7 @@ namespace lsp
 
             if (pressed & S_LED)
             {
-                Color cl(sColor);
+                Color cl(color);
                 cl.lightness(lightness);
 
                 gr = s->radial_gradient(c_x - b_w, c_y + b_h, b_rad * 0.25f, c_x, c_y, b_rad * 0.8f);
@@ -319,20 +306,26 @@ namespace lsp
             }
 
             // Output text
-            if (sTitle.length() > 0)
+            LSPString title;
+            sTitle.format(&title);
+            if (title.length() > 0)
             {
                 text_parameters_t tp;
                 font_parameters_t fp;
 
+                Color font_color(sFont.raw_color());
+                font_color.scale_lightness(brightness());
+
                 sFont.get_parameters(s, &fp);
-                sFont.get_text_parameters(s, &tp, &sTitle);
+                sFont.get_text_parameters(s, &tp, &title);
 
                 if (pressed & S_PRESSED)
+                {
                     c_y++;
-                if (pressed & S_TOGGLED)
                     c_x++;
+                }
 
-                sFont.draw(s, c_x - (tp.Width * 0.5f), c_y - (fp.Height * 0.5f) + fp.Ascent, &sTitle);
+                sFont.draw(s, c_x - (tp.XAdvance * 0.5f), c_y - (fp.Height * 0.5f) + fp.Ascent, font_color, &title);
             }
 
             s->set_antialiasing(aa);
@@ -345,16 +338,20 @@ namespace lsp
             r->nMinWidth    = nMinWidth;
             r->nMinHeight   = nMinHeight;
 
-            if (sTitle.length() > 0)
+            LSPString title;
+            sTitle.format(&title);
+
+            if (title.length() > 0)
             {
                 text_parameters_t tp;
                 font_parameters_t fp;
+
                 ISurface *s = pDisplay->create_surface(1, 1);
 
                 if (s != NULL)
                 {
                     sFont.get_parameters(s, &fp);
-                    sFont.get_text_parameters(s, &tp, &sTitle);
+                    sFont.get_text_parameters(s, &tp, &title);
                     s->destroy();
                     delete s;
 
@@ -382,7 +379,9 @@ namespace lsp
             nWidth      = nMinWidth;
             nHeight     = nMinHeight;
 
-            if (sTitle.length() <= 0)
+            LSPString title;
+            sTitle.format(&title);
+            if (title.length() <= 0)
                 return;
 
             text_parameters_t tp;
@@ -392,7 +391,7 @@ namespace lsp
                 return;
 
             sFont.get_parameters(s, &fp);
-            sFont.get_text_parameters(s, &tp, &sTitle);
+            sFont.get_text_parameters(s, &tp, &title);
             s->destroy();
             delete s;
 
@@ -597,45 +596,5 @@ namespace lsp
             return STATUS_OK;
         }
 
-        status_t LSPButton::set_title(const char *title)
-        {
-            if (title != NULL)
-            {
-                LSPString tmp;
-                tmp.set_native(title);
-                if (tmp.equals(&sTitle))
-                    return STATUS_OK;
-
-                sTitle.swap(&tmp);
-            }
-            else if (sTitle.length() > 0)
-                sTitle.truncate();
-            else
-                return STATUS_OK;
-
-            query_resize();
-
-            return STATUS_OK;
-        }
-
-        status_t LSPButton::set_title(const LSPString *title)
-        {
-            if (title != NULL)
-            {
-                if (sTitle.equals(title))
-                    return STATUS_OK;
-                if (!sTitle.set(title))
-                    return STATUS_NO_MEM;
-            }
-            else if (sTitle.length() > 0)
-                sTitle.truncate();
-            else
-                return STATUS_OK;
-
-            query_resize();
-
-            return STATUS_OK;
-        }
-    
     } /* namespace tk */
 } /* namespace lsp */

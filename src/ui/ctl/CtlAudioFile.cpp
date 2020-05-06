@@ -8,16 +8,49 @@
 #include <ui/ctl/ctl.h>
 #include <ui/common.h>
 #include <core/files/config.h>
+#include <core/port_data.h>
 
 namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlAudioFile::metadata = { "CtlAudioFile", &CtlWidget::metadata };
         
+        CtlAudioFile::DataSink::DataSink(CtlAudioFile *file)
+        {
+            pFile       = file;
+        }
+
+        CtlAudioFile::DataSink::~DataSink()
+        {
+            unbind();
+        }
+
+        status_t CtlAudioFile::DataSink::on_complete(status_t code, const LSPString *data)
+        {
+            if ((code != STATUS_OK) || (pFile == NULL))
+                return STATUS_OK;
+
+            // Apply configuration
+            CtlConfigHandler dst;
+            LSP_STATUS_ASSERT(pFile->bind_ports(&dst));
+            LSP_STATUS_ASSERT(config::deserialize(data, &dst));
+
+            return STATUS_OK;
+        }
+
+        void CtlAudioFile::DataSink::unbind()
+        {
+            if (pFile != NULL)
+                pFile->pDataSink    = NULL;
+            pFile   = NULL;
+        }
+
         CtlAudioFile::CtlAudioFile(CtlRegistry *src, LSPAudioFile *af):
             CtlWidget(src, af),
             sMenu(af->display())
         {
+            pClass          = &metadata;
             pFile           = NULL;
             pMesh           = NULL;
             pPathID         = NULL;
@@ -29,6 +62,7 @@ namespace lsp
             pFadeIn         = NULL;
             pFadeOut        = NULL;
             pPath           = NULL;
+            pDataSink       = NULL;
 
             for (size_t i=0; i<N_MENU_ITEMS; ++i)
                 vMenuItems[i]   = NULL;
@@ -64,7 +98,6 @@ namespace lsp
 
             // Initialize color controllers
             sColor.init_basic(pRegistry, af, af->color(), A_COLOR);
-            sBgColor.init_basic(pRegistry, af, af->bg_color(), A_BG_COLOR);
             sPadding.init(af->padding());
 
             af->slots()->bind(LSPSLOT_ACTIVATE, slot_on_activate, this);
@@ -84,7 +117,7 @@ namespace lsp
             vMenuItems[off++] = mi;
             LSP_VSTATUS_ASSERT(mi->init());
             LSP_VSTATUS_ASSERT(sMenu.add(mi));
-            LSP_VSTATUS_ASSERT(mi->set_text("Cut"));
+            LSP_VSTATUS_ASSERT(mi->text()->set("actions.edit.cut"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_cut_action, this);
             if (id < 0)
                 return;
@@ -95,7 +128,7 @@ namespace lsp
             vMenuItems[off++] = mi;
             LSP_VSTATUS_ASSERT(mi->init());
             LSP_VSTATUS_ASSERT(sMenu.add(mi));
-            LSP_VSTATUS_ASSERT(mi->set_text("Copy"));
+            LSP_VSTATUS_ASSERT(mi->text()->set("actions.edit.copy"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_copy_action, this);
             if (id < 0)
                 return;
@@ -106,7 +139,7 @@ namespace lsp
             vMenuItems[off++] = mi;
             LSP_VSTATUS_ASSERT(mi->init());
             LSP_VSTATUS_ASSERT(sMenu.add(mi));
-            LSP_VSTATUS_ASSERT(mi->set_text("Paste"));
+            LSP_VSTATUS_ASSERT(mi->text()->set("actions.edit.paste"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_paste_action, this);
             if (id < 0)
                 return;
@@ -117,7 +150,7 @@ namespace lsp
             vMenuItems[off++] = mi;
             LSP_VSTATUS_ASSERT(mi->init());
             LSP_VSTATUS_ASSERT(sMenu.add(mi));
-            LSP_VSTATUS_ASSERT(mi->set_text("Clear"));
+            LSP_VSTATUS_ASSERT(mi->text()->set("actions.edit.clear"));
             id = mi->slots()->bind(LSPSLOT_SUBMIT, slot_popup_clear_action, this);
             if (id < 0)
                 return;
@@ -141,7 +174,7 @@ namespace lsp
                 af->set_show_data(false);
                 af->set_show_file_name(false);
                 af->set_show_hint(true);
-                af->set_hint("Click to load");
+                af->hint()->set("labels.click_or_drag_to_load");
             }
             else if (status == STATUS_LOADING)
             {
@@ -149,7 +182,7 @@ namespace lsp
                 af->set_show_data(false);
                 af->set_show_file_name(false);
                 af->set_show_hint(true);
-                af->set_hint("Loading...");
+                af->hint()->set("statuses.loading");
             }
             else if (status == STATUS_OK)
             {
@@ -163,7 +196,11 @@ namespace lsp
                 af->set_show_data(false);
                 af->set_show_file_name(false);
                 af->set_show_hint(true);
-                af->set_hint(get_status(status_t(status)));
+
+                LSPString code;
+                code.set_utf8("statuses.std.");
+                code.append_utf8(get_status_lc_key(status_t(status)));
+                af->hint()->set(&code);
             }
         }
 
@@ -287,11 +324,11 @@ namespace lsp
                     break;
                 case A_WIDTH:
                     if (af != NULL)
-                        PARSE_INT(value, af->constraints()->set_width(__, __));
+                        PARSE_INT(value, af->constraints()->set_min_width(__));
                     break;
                 case A_HEIGHT:
                     if (af != NULL)
-                        PARSE_INT(value, af->constraints()->set_height(__, __));
+                        PARSE_INT(value, af->constraints()->set_min_height(__));
                     break;
                 case A_FORMAT:
                     if (af != NULL)
@@ -305,12 +342,9 @@ namespace lsp
                     break;
                 default:
                 {
-                    bool set = sColor.set(att, value);
-                    set |= sBgColor.set(att, value);
-                    set |= sPadding.set(att, value);
-
-                    if (!set)
-                        CtlWidget::set(att, value);
+                    sColor.set(att, value);
+                    sPadding.set(att, value);
+                    CtlWidget::set(att, value);
                     break;
                 }
             }
@@ -383,16 +417,17 @@ namespace lsp
             lsp_trace("Serialized config: \n%s", str.get_native());
 
             // Copy data to clipboard
-            LSPTextClipboard *cb = new LSPTextClipboard();
-            if (cb == NULL)
+            LSPTextDataSource *ds = new LSPTextDataSource();
+            if (ds == NULL)
                 return STATUS_NO_MEM;
+            ds->acquire();
 
-            status_t result = cb->update_text(&str);
+            status_t result = ds->set_text(&str);
             if (result == STATUS_OK)
-                af->display()->write_clipboard(CBUF_CLIPBOARD, cb);
-            cb->close();
+                af->display()->set_clipboard(CBUF_CLIPBOARD, ds);
+            ds->release();
 
-            return STATUS_OK;
+            return result;
         }
 
         status_t CtlAudioFile::slot_popup_paste_action(LSPWidget *sender, void *ptr, void *data)
@@ -404,30 +439,18 @@ namespace lsp
             if (af == NULL)
                 return STATUS_BAD_STATE;
 
-            return af->display()->fetch_clipboard(CBUF_CLIPBOARD, "UTF8_STRING", clipboard_handler, ctl);
-        }
+            // Fetch data from clipboard
+            DataSink *ds = new DataSink(ctl);
+            if (ds == NULL)
+                return STATUS_NO_MEM;
+            if (ctl->pDataSink != NULL)
+                ctl->pDataSink->unbind();
+            ctl->pDataSink = ds;
 
-        status_t CtlAudioFile::clipboard_handler(void *arg, status_t s, io::IInputStream *is)
-        {
-            if (s != STATUS_OK)
-                return s;
-            else if (is == NULL)
-                return STATUS_BAD_STATE;
-
-            CtlAudioFile *ctl = static_cast<CtlAudioFile *>(arg);
-            if (ctl == NULL)
-                return STATUS_BAD_ARGUMENTS;
-            LSPAudioFile *af    = widget_cast<LSPAudioFile>(ctl->pWidget);
-            if (af == NULL)
-                return STATUS_BAD_STATE;
-
-            LSPString str;
-            CtlConfigHandler dst;
-
-            LSP_STATUS_ASSERT(ctl->bind_ports(&dst));
-            LSP_STATUS_ASSERT(config::load(is, &dst));
-
-            return STATUS_OK;
+            ds->acquire();
+            status_t res = af->display()->get_clipboard(CBUF_CLIPBOARD, ds);
+            ds->release();
+            return res;
         }
 
         status_t CtlAudioFile::bind_ports(CtlPortHandler *h)

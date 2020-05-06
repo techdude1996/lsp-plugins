@@ -30,8 +30,10 @@
 #include <plugins/oscillator.h>
 #include <plugins/latency_meter.h>
 #include <plugins/mb_compressor.h>
-
 #include <plugins/profiler.h>
+#include <plugins/room_builder.h>
+#include <plugins/mb_expander.h>
+
 #include <plugins/nonlinear_convolver.h>
 
 #include <plugins/midi_override.h>

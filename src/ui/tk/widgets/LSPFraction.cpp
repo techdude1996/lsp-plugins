@@ -16,7 +16,8 @@ namespace lsp
         LSPFraction::LSPFraction(LSPDisplay *dpy): LSPComplexWidget(dpy),
                 sNumerator(dpy),
                 sDenominator(dpy),
-                sFont(dpy)
+                sFont(this),
+                sColor(this)
         {
             nMinWidth       = -1;
             nMinHeight      = -1;
@@ -57,7 +58,6 @@ namespace lsp
 
             init_color(C_LABEL_TEXT, sFont.color());
             init_color(C_LABEL_TEXT, &sColor);
-            init_color(C_BACKGROUND, &sBgColor);
 
             sFont.init();
             sFont.set_bold(true);
@@ -367,18 +367,19 @@ namespace lsp
             ssize_t width       = 0;
 
             // Estimate the maximum width of the list box
+            LSPString str;
             for (size_t i=0, n=lst->size(); i<n; ++i)
             {
                 // Fetch item
                 LSPItem *item = lst->get(i);
                 if (item == NULL)
                     continue;
-                const char *str = item->text();
-                if (str == NULL)
+                item->text()->format(&str);
+                if (str.is_empty())
                     continue;
 
                 // Get text parameters
-                sFont.get_text_parameters(s, &tp, str);
+                sFont.get_text_parameters(s, &tp, &str);
                 if (tp.Width > width)
                     width = tp.Width;
             }
@@ -412,14 +413,22 @@ namespace lsp
             num.set_native("-");
             ssize_t sel = sNumerator.selected();
             if (sel >= 0)
-                sNumerator.items()->get_text(sel, &num);
+            {
+                LSPItem *it = sNumerator.items()->get(sel);
+                if (it != NULL)
+                    it->text()->format(&num);
+            }
             sFont.get_text_parameters(s, &tp, &num);
 
             // Get denominator parameters
             denom.set_native("-");
             sel = sDenominator.selected();
             if (sel >= 0)
-                sDenominator.items()->get_text(sel, &denom);
+            {
+                LSPItem *it = sDenominator.items()->get(sel);
+                if (it != NULL)
+                    it->text()->format(&denom);
+            }
             sFont.get_text_parameters(s, &bp, &denom);
 
             t.nHeight   = fp.Height;
@@ -470,13 +479,21 @@ namespace lsp
 
         void LSPFraction::draw(ISurface *s)
         {
-//            Color c;
             LSPString num, denom;
             font_parameters_t fp;
             text_parameters_t tp, bp;
             realize_t t, b;
 
-            s->clear(sBgColor);
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color color(sColor);
+            Color font(sFont.raw_color());
+
+            color.scale_lightness(brightness());
+            font.scale_lightness(brightness());
+
+            // Clear
+            s->clear(bg_color);
 
             // Get font parameters
             sFont.get_parameters(s, &fp);
@@ -490,14 +507,22 @@ namespace lsp
             num.set_native("-");
             ssize_t sel = sNumerator.selected();
             if (sel >= 0)
-                sNumerator.items()->get_text(sel, &num);
+            {
+                LSPItem *it = sNumerator.items()->get(sel);
+                if (it != NULL)
+                    it->text()->format(&num);
+            }
             sFont.get_text_parameters(s, &tp, &num);
 
             // Get denominator parameters
             denom.set_native("-");
             sel = sDenominator.selected();
             if (sel >= 0)
-                sDenominator.items()->get_text(sel, &denom);
+            {
+                LSPItem *it = sDenominator.items()->get(sel);
+                if (it != NULL)
+                    it->text()->format(&denom);
+            }
             sFont.get_text_parameters(s, &bp, &denom);
 
             t.nHeight   = fp.Height;
@@ -509,8 +534,6 @@ namespace lsp
             float angle = fAngle * M_PI / 180.0f;
             float dx    = cosf(angle);
             float dy    = sinf(angle);
-
-//            c.set_rgb(1, 0, 0);
 
             ssize_t cx  = sSize.nWidth >> 1;    // Center of fraction (x)
             ssize_t cy  = sSize.nHeight >> 1;   // Center of fraction (y)
@@ -543,15 +566,14 @@ namespace lsp
             sDenom.nHeight  = b.nHeight;
 
             // Output numerator and denominator
-//            c.set_rgb(0, 1, 0);
             bool aa     = s->set_antialiasing(true);
-            sFont.draw(s, t.nLeft - ( tp.Width)*0.5f, t.nTop - fp.Descent + fp.Height*0.5f, &num);
-            sFont.draw(s, b.nLeft - ( bp.Width)*0.5f, b.nTop - fp.Descent + fp.Height*0.5f, &denom);
+            sFont.draw(s, t.nLeft - ( tp.Width)*0.5f, t.nTop - fp.Descent + fp.Height*0.5f, font, &num);
+            sFont.draw(s, b.nLeft - ( bp.Width)*0.5f, b.nTop - fp.Descent + fp.Height*0.5f, font, &denom);
 
             // Draw line
             dx          = dx * t.nHeight;
             dy          = dy * t.nHeight;
-            s->line(cx + dx, cy - dy, cx - dx, cy + dy, lw, sColor);
+            s->line(cx + dx, cy - dy, cx - dx, cy + dy, lw, color);
             s->set_antialiasing(aa);
         }
 

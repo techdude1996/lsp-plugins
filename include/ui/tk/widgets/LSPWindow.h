@@ -28,6 +28,16 @@ namespace lsp
                 static const w_class_t    metadata;
 
             protected:
+                class Title: public LSPLocalString
+                {
+                    public:
+                        inline Title(LSPWidget *widget): LSPLocalString(widget) {}
+
+                    protected:
+                        virtual void        sync();
+                };
+
+            protected:
                 INativeWindow      *pWindow;
                 void               *pNativeHandle;
                 LSPWidget          *pChild;
@@ -45,8 +55,10 @@ namespace lsp
                 float               nHorPos;
                 float               nVertScale;
                 float               nHorScale;
-                LSPString           sCaption;
+                size_t              nBorder;
                 LSPWindowActions    sActions;
+                LSPColor            sBorder;
+                Title               sTitle;
                 window_poilicy_t    enPolicy;
 
             //---------------------------------------------------------------------------------
@@ -86,6 +98,16 @@ namespace lsp
                  */
                 inline void *handle() { return (pWindow != NULL) ? pWindow->handle() : NULL; };
 
+                /**
+                 * Get native window
+                 * @return native window
+                 */
+                inline INativeWindow *native() { return pWindow; };
+
+                /**
+                 * Return true if window is a sub-window of another window
+                 * @return true if window is a sub-window of another window
+                 */
                 inline bool nested() { return pNativeHandle != NULL; }
 
                 /** Get border style of the window
@@ -108,9 +130,8 @@ namespace lsp
 
                 inline bool size_request_pending() const { return bSizeRequest; }
 
-                inline const char *title() const { return sCaption.get_native(); }
-
-                inline status_t get_title(LSPString *dst) const { return dst->set(&sCaption) ? STATUS_OK : STATUS_NO_MEM; };
+                inline LSPLocalString *title()                  { return &sTitle; }
+                inline const LSPLocalString *title() const      { return &sTitle; }
 
                 inline window_poilicy_t policy() const          { return enPolicy; }
 
@@ -118,15 +139,13 @@ namespace lsp
                 inline float            hpos() const            { return nHorPos; }
                 inline float            vscale() const          { return nVertScale; }
                 inline float            hscale() const          { return nHorScale; }
+                inline size_t           border() const          { return nBorder; }
+                inline LSPColor        *border_color()          { return &sBorder; }
 
             //---------------------------------------------------------------------------------
             // Manipulation
             public:
                 virtual void        query_resize();
-
-                virtual status_t    set_title(const char *caption);
-
-                virtual status_t    set_title(const LSPString *value);
 
                 /** Render window's content to surface
                  *
@@ -231,12 +250,24 @@ namespace lsp
 
                 status_t point_child(LSPWidget *focus);
 
+                status_t                grab_events(grab_t grab);
+
+                status_t                ungrab_events();
+
+                void                    set_border(size_t border);
+
                 void set_policy(window_poilicy_t policy);
 
                 void                    set_vpos(float value);
                 void                    set_hpos(float value);
                 void                    set_vscale(float value);
                 void                    set_hscale(float value);
+
+                status_t                set_class(const char *instance, const char *wclass);
+                status_t                set_class(const LSPString *instance, const LSPString *wclass);
+
+                status_t                set_role(const char *role);
+                status_t                set_role(const LSPString *role);
 
             //---------------------------------------------------------------------------------
             // Event handling

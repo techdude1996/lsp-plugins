@@ -3,11 +3,11 @@
 	
 	$nf     =   (strpos($PAGE, '_x32') > 0) ? 32 : 16;
 	$m      =   (strpos($PAGE, '_mono') > 0) ? 'm' : (
-				(strpos($PAGE, '_stereo') > 0) ? 's' : (
-				(strpos($PAGE, '_lr') > 0) ? 'lr' : (
-				(strpos($PAGE, '_ms') > 0) ? 'ms' : '?'
-				)));
-	$cc     =   ($m = 'm') ? 'mono' : 'stereo';
+	            (strpos($PAGE, '_stereo') > 0) ? 's' : (
+                (strpos($PAGE, '_lr') > 0) ? 'lr' : (
+                (strpos($PAGE, '_ms') > 0) ? 'ms' : '?'
+	            )));
+	$cc     =   ($m == 'm') ? 'mono' : 'stereo';
 ?>
 <?php require_once("${DOC_BASE}/manuals/common/filters.php"); ?>
 <p>
@@ -24,6 +24,7 @@
 	</li>
 	<li><b>Matched Z Transform (MT) filters</b> are probably the best choice when cutting out individual short range of frequencies.</li>
 	<li><b>Bilinear Transform (BT) filters</b> are good when cutting-out high frequencies because they have -INF dB amplification at the Nyquist frequency.</li>
+    <li><b>Direct Design (DR) filters</b> add alterantive implementations for the various supperted filter types, and may be chosen whenever their frequency response is best suited.</li>
 </ul>
 <p>
 	This plugin performs parametric equalization of <?= $cc ?> channel<?php 
@@ -31,12 +32,26 @@
 	elseif ($m == 'lr') echo " by applying individual equalization to left and right channels separately";
 	?>. Up to <?= $nf ?> filters are available for signal processing simultaneously.
 </p>
+<p><b>Meters:</b></p>
+<ul>
+	<?php if ($m == 'ms') { ?>
+		<li><b>Input</b> - the level meter for left and right channels of the input signal.
+		If <b>Listen</b> button is pressed, it shows the level of middle and side channels of the input signal respectively.</li>
+		<li><b>Output</b> - the level meter for left and right channels of the output signal.
+		If <b>Listen</b> button is pressed, it shows the level of middle and side channels of the output signal respectively.</li>
+	<?php } elseif ($m != 'm') { ?>
+		<li><b>Input</b> - the level meter for left and right channels of the input signal.</li>
+		<li><b>Output</b> - the level meter for left and right channels of the output signal.</li>
+	<?php } else { ?>
+		<li><b>Input</b> - the level meter of the input mono signal.</li>
+		<li><b>Output</b> - the level meter of the output mono signal.</li>
+	<?php } ?>
+</ul>
 <p><b>Controls:</b></p>
 <ul>
 	<li>
 		<b>Bypass</b> - bypass switch, when turned on (led indicator is shining), the plugin bypasses signal.
 	</li>
-	<li><b>Filters</b> - filter panel selection</li>
 	<li><b>Mode</b> - equalizer working mode, enables the following mode for all filters:</li>
 	<ul>
 		<li><b>IIR</b> - Infinite Impulse Response filters, nonlinear minimal phase. In most cases does not add noticeable latency to output signal.</li>
@@ -58,19 +73,17 @@
 	<li><b>Input</b> - input signal amplification.</li>
 	<li><b>Output</b> - output signal amplification.</li>
 	<?php if ($m != 'm') { ?>
-	<li><b>Balance</b> - balance between left and right output signal.</li>
-		<?php if ($m == 'ms') { ?>
-		<li><b>L</b> - the measured level of the output signal for the left channel, visible only when <b>Listen</b> button is off.</li>
-		<li><b>R</b> - the measured level of the output signal for the right channel, visible only when <b>Listen</b> button is off.</li>
-		<li><b>M</b> - the measured level of the output signal for the middle channel, visible only when <b>Listen</b> button is on.</li>
-		<li><b>S</b> - the measured level of the output signal for the side channel, visible only when <b>Listen</b> button is on</li>
-		<?php } else { ?>
-		<li><b>L</b> - the measured level of the output signal for the left channel.</li>
-		<li><b>R</b> - the measured level of the output signal for the right channel.</li>
-		<?php }?>
-	<?php } else { ?>
-	<li><b>Signal</b> - the measured level of the output signal.</li>
+	<li><b>Balance</b> - balance between left and right output channels.</li>
 	<?php } ?>
+	<?php if ($m == 'ms') { ?>
+	<li><b>Pitch Mid</b> - the frequency shift for all filters of the middle channel, in semitones.</li>
+	<li><b>Pitch Side</b> - the frequency shift for all filters of the side channel, in semitones.</li>
+	<?php } elseif ($m == 'lr' ) { ?>
+	<li><b>Pitch Left</b> - the frequency shift for all filters of the left channel, in semitones.</li>
+	<li><b>Pitch Right</b> - the frequency shift for all filters of the right channel, in semitones.</li>
+	<?php } else { ?>
+	<li><b>Pitch</b> - the frequency shift for all filters, in semitones.</li>
+	<?php }?>
 </ul>
 <p><b>'Analysis' section:</b></p>
 <ul>
@@ -96,8 +109,12 @@
 		<li><b>RLC</b> - Very smooth filters based on similar cascades of RLC contours.</li>
 		<li><b>BWC</b> - Butterworth-Chebyshev-type-1 based filters. Does not affect <b>Resonance</b> and <b>Notch</b> filters.</li>
 		<li><b>LRX</b> - Linkwitz-Riley based filters. Does not affect <b>Resonance</b> and <b>Notch</b> filters.</li>
+        <li><b>APO</b> - Digital biquad filters derived from canonic analog biquad prototypes digitalized through
+        				Bilinear transform. These are <a href="https://shepazu.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html">textbook filters</a> 
+        				which are implemented as in the <a href="https://equalizerapo.com/">EqualizerAPO</a> software.</li>
 		<li><b>BT</b> - Bilinear Z-transform is used for pole/zero mapping.</li>
 		<li><b>MT</b> - Matched Z-transform is used for pole/zero mapping.</li>
+        <li><b>DR</b> - Direct design is used to serve the digital filter coefficients directly in the digital domain, without performing transforms.</li>
 	</ul>
 	<li><b>Slope</b> - the slope of the filter characteristics.</li>
 	<li><b>S</b> - the soloing button, allows to inspect selected filters.</li>

@@ -14,10 +14,12 @@ namespace lsp
     {
         class CtlButton: public CtlWidget
         {
+            public:
+                static const ctl_class_t metadata;
+
             protected:
                 float           fValue;
                 CtlPort        *pPort;
-                CtlColor        sBgColor;
                 CtlColor        sColor;
                 CtlColor        sTextColor;
 
@@ -29,31 +31,18 @@ namespace lsp
                 float       next_value(bool down);
 
             public:
-                CtlButton(CtlRegistry *src, LSPButton *widget);
+                explicit CtlButton(CtlRegistry *src, LSPButton *widget);
                 virtual ~CtlButton();
 
             public:
-                /** Begin initialization of controller
-                 *
-                 */
                 virtual void init();
 
-                /** Set attribute to widget
-                 *
-                 * @param att attribute identifier
-                 * @param value attribute value
-                 */
+                virtual void set(const char *name, const char *value);
+
                 virtual void set(widget_attribute_t att, const char *value);
 
-                /** Notify controller about one of port bindings has changed
-                 *
-                 * @param port port triggered change
-                 */
                 virtual void notify(CtlPort *port);
 
-                /** Complete initialization
-                 *
-                 */
                 virtual void end();
         };
     

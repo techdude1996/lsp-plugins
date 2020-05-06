@@ -49,6 +49,7 @@ namespace lsp
                 Compressor      sComp;              // Compressor
                 Filter          sPassFilter;        // Passing filter for 'classic' mode
                 Filter          sRejFilter;         // Rejection filter for 'classic' mode
+                Filter          sAllFilter;         // All-pass filter for phase compensation
                 Delay           sDelay;             // Delay for lookahead purpose
 
                 float          *vTr;                // Transfer function
@@ -68,7 +69,6 @@ namespace lsp
                 bool            bEnabled;           // Enabled flag
                 bool            bCustHCF;           // Custom frequency for high-cut filter
                 bool            bCustLCF;           // Custom frequency for low-cut filter
-//                bool            bFFT;               // Enable FFT for channel
                 bool            bMute;              // Mute channel
                 bool            bSolo;              // Solo channel
                 bool            bExtSc;             // External sidechain
@@ -86,8 +86,6 @@ namespace lsp
                 IPort          *pScLcfFreq;         // Sidechain low-cut frequency
                 IPort          *pScHcfFreq;         // Sidechain hi-cut frequency
                 IPort          *pScFreqChart;       // Sidechain band frequency chart
-//                IPort          *pScFftOn;           // Sidechain FFT enable
-//                IPort          *pScFftChart;        // Sidechain FFT graph
 
                 IPort          *pMode;              // Compressor mode
                 IPort          *pEnable;            // Enable compressor
@@ -99,6 +97,7 @@ namespace lsp
                 IPort          *pRelTime;           // Release time
                 IPort          *pRatio;             // Ratio
                 IPort          *pKnee;              // Knee
+                IPort          *pBThresh;           // Boost threshold
                 IPort          *pMakeup;            // Makeup gain
                 IPort          *pFreqEnd;           // Frequency range end
                 IPort          *pCurveGraph;        // Compressor curve graph
@@ -140,10 +139,8 @@ namespace lsp
 
                 size_t          nAnInChannel;       // Analyzer channel used for input signal analysis
                 size_t          nAnOutChannel;      // Analyzer channel used for output signal analysis
-//                size_t          nSfFttChannel;      // Sidechain FFT channel
                 bool            bInFft;             // Input signal FFT enabled
                 bool            bOutFft;            // Output signal FFT enabled
-//                bool            bScFft;             // Sidechain FFT enabled
 
                 IPort          *pIn;                // Input
                 IPort          *pOut;               // Output
@@ -152,7 +149,6 @@ namespace lsp
                 IPort          *pFftInSw;           // Pre-processing FFT analysis control port
                 IPort          *pFftOut;            // Post-processing FFT analysis data
                 IPort          *pFftOutSw;          // Post-processing FFT analysis controlport
-//                IPort          *pScFftSw;           // Sidechain FFT enable switch
                 IPort          *pAmpGraph;          // Compressor's amplitude graph
                 IPort          *pInLvl;             // Input level meter
                 IPort          *pOutLvl;            // Output level meter
@@ -176,7 +172,8 @@ namespace lsp
             float          *vBuffer;                // Temporary buffer
             float          *vEnv;                   // Compressor envelope buffer
             float          *vTr;                    // Transfer buffer
-            float          *vTr2;                   // Transfer buffer (second)
+            float          *vPFc;                   // Pass filter characteristics buffer
+            float          *vRFc;                   // Reject filter characteristics buffer
             float          *vFreqs;                 // Analyzer FFT frequencies
             float          *vCurve;                 // Curve
             uint32_t       *vIndexes;               // Analyzer FFT indexes
@@ -197,7 +194,7 @@ namespace lsp
             static bool compare_bands_for_sort(const comp_band_t *b1, const comp_band_t *b2);
 
         public:
-            mb_compressor_base(const plugin_metadata_t &metadata, bool sc, size_t mode);
+            explicit mb_compressor_base(const plugin_metadata_t &metadata, bool sc, size_t mode);
             virtual ~mb_compressor_base();
 
         public:

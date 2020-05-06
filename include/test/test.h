@@ -18,6 +18,13 @@
     #define TEST_SUPPORTED(ptr)     false
 #endif /* LSP_TESTING */
 
+#define TEST_ASSERT(code) \
+        if (!(code)) { \
+            fprintf(stderr, "Test assertion has failed at file %s, line %d:\n  %s\n", \
+                    __FILE__, __LINE__, # code); \
+            exit(2); \
+        }
+
 namespace test
 {
     class Test
@@ -32,10 +39,16 @@ namespace test
             const char     *__test_name;
             mutable char   *__full_name;
             bool            __verbose;
+            const char     *__executable;
 
         public:
-            inline const char *name() const     { return __test_name; }
-            inline const char *group() const    { return __test_group; }
+            int             printf(const char *fmt, ...);
+            int             eprintf(const char *fmt, ...);
+
+        public:
+            inline const char *name() const         { return __test_name; }
+            inline const char *group() const        { return __test_group; }
+            inline const char *executable() const   { return __executable; }
             const char *full_name() const;
 
         public:
@@ -43,11 +56,16 @@ namespace test
             virtual ~Test();
 
         public:
-            inline void set_verbose(bool verbose)      { __verbose = verbose; }
+            inline void set_verbose(bool verbose)       { __verbose = verbose; }
+            inline void set_executable(const char *name){ __executable = name; }
 
             virtual void execute(int argc, const char **argv) = 0;
 
+            virtual void init();
+
             virtual bool ignore() const;
+
+            virtual void destroy();
 
             virtual Test *next_test() const = 0;
 

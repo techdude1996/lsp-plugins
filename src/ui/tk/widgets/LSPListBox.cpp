@@ -123,7 +123,8 @@ namespace lsp
             sHBar(dpy, true),
             sVBar(dpy, false),
             sConstraints(this),
-            sFont(dpy, this)
+            sColor(this),
+            sFont(this)
         {
             nFlags              = 0;
             nBMask              = 0;
@@ -177,17 +178,8 @@ namespace lsp
             if (result != STATUS_OK)
                 return result;
 
-            if (pDisplay != NULL)
-            {
-                LSPTheme *theme = pDisplay->theme();
-
-                if (theme != NULL)
-                {
-                    init_color(C_LABEL_TEXT, &sColor);
-                    init_color(C_BACKGROUND, &sBgColor);
-                    init_color(C_LABEL_TEXT, sFont.color());
-                }
-            }
+            init_color(C_LABEL_TEXT, &sColor);
+            init_color(C_LABEL_TEXT, sFont.color());
 
             result = sHBar.init();
             if (result != STATUS_OK)
@@ -435,16 +427,21 @@ namespace lsp
             if (lst != NULL)
                 s->draw(lst, sArea.nLeft, sArea.nTop);
 
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color color(sColor);
+            color.scale_lightness(brightness());
+
             // Draw the frame around
             size_t dx = (sVBar.visible()) ? 7 : 6;
             size_t dy = (sHBar.visible()) ? 7 : 6;
 
             s->fill_frame(sSize.nLeft, sSize.nTop, sArea.nWidth + dx, sArea.nHeight + dy,
                         sArea.nLeft, sArea.nTop, sArea.nWidth, sArea.nHeight,
-                        sBgColor);
+                        bg_color);
 
             bool aa = s->set_antialiasing(true);
-            s->wire_round_rect(sSize.nLeft + 0.5f, sSize.nTop + 0.5f, sArea.nWidth + 5, sArea.nHeight + 5, 2, SURFMASK_ALL_CORNER, 1, sColor);
+            s->wire_round_rect(sSize.nLeft + 0.5f, sSize.nTop + 0.5f, sArea.nWidth + 5, sArea.nHeight + 5, 2, SURFMASK_ALL_CORNER, 1, color);
             s->set_antialiasing(aa);
 
             // Finally, draw scroll bars
@@ -468,8 +465,18 @@ namespace lsp
 
         void LSPListBox::draw(ISurface *s)
         {
-            s->clear(sBgColor);
+            // Prepare palette
+            Color bg_color(sBgColor);
+            Color color(sColor);
+            Color font(sFont.raw_color());
 
+            color.scale_lightness(brightness());
+            font.scale_lightness(brightness());
+
+            // Draw background
+            s->clear(bg_color);
+
+            // Draw
             font_parameters_t fp;
             sFont.get_parameters(s, &fp);
 
@@ -477,23 +484,22 @@ namespace lsp
             ssize_t last  = (sVBar.value() + sArea.nHeight + fp.Height - 1) / fp.Height;
             ssize_t y     = first * fp.Height - sVBar.value();
 
+            LSPString text;
             for ( ; first <= last; first++, y += fp.Height)
             {
                 LSPItem *item = sItems.get(first);
                 if (item == NULL)
                     continue;
 
-                const char *text = item->text();
-                if (text == NULL)
-                    continue;
-
+                item->text()->format(&text, this);
                 if (sSelection.contains(first))
                 {
-                    s->fill_rect(0.0f, y, sArea.nWidth, fp.Height, *(sFont.color()));
-                    sFont.draw(s, 1.0f, y + fp.Ascent, sBgColor, text);
+                    s->fill_rect(0.0f, y, sArea.nWidth, fp.Height, font);
+                    if (text.length() > 0)
+                        sFont.draw(s, 1.0f, y + fp.Ascent, bg_color, &text);
                 }
-                else
-                    sFont.draw(s, 1.0f, y + fp.Ascent, text);
+                else if (text.length() > 0)
+                    sFont.draw(s, 1.0f, y + fp.Ascent, font, &text);
             }
         }
 
@@ -561,17 +567,18 @@ namespace lsp
             size_t padding  = 6;
             size_t n_items  = sItems.size();
 
+            LSPString text;
             for (size_t i=0; i<n_items; ++i)
             {
                 LSPItem *item = sItems.get(i);
                 if (item == NULL)
                     continue;
 
-                const char *text = item->text();
-                if (text == NULL)
+                item->text()->format(&text, this);
+                if (text.is_empty())
                     continue;
 
-                sFont.get_text_parameters(s, &tp, text);
+                sFont.get_text_parameters(s, &tp, &text);
                 if (tp.Width > r->nMaxWidth)
                     r->nMaxWidth    = tp.Width;
             }
@@ -594,6 +601,9 @@ namespace lsp
                 r->nMaxWidth = r->nMinWidth;
             if (r->nMaxHeight < r->nMinHeight)
                 r->nMaxHeight = r->nMinHeight;
+
+            s->destroy();
+            delete s;
         }
 
         void LSPListBox::realize(const realize_t *r)

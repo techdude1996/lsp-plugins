@@ -75,6 +75,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_BELL, 1)
                     EQS(LRX_BT, FLT_BT_LRX_BELL, 1)
                     EQS(LRX_MT, FLT_MT_LRX_BELL, 1)
+                    EQS(APO_DR, FLT_DR_APO_PEAKING, 1)
                     EQDFL
                 }
                 break;
@@ -90,6 +91,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_HIPASS, 2)
                     EQS(LRX_BT, FLT_BT_LRX_HIPASS, 1)
                     EQS(LRX_MT, FLT_MT_LRX_HIPASS, 1)
+                    EQS(APO_DR, FLT_DR_APO_HIPASS, 1)
                     EQDFL
                 }
                 break;
@@ -105,6 +107,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_HISHELF, 1)
                     EQS(LRX_BT, FLT_BT_LRX_HISHELF, 1)
                     EQS(LRX_MT, FLT_MT_LRX_HISHELF, 1)
+                    EQS(APO_DR, FLT_DR_APO_HISHELF, 1)
                     EQDFL
                 }
                 break;
@@ -120,6 +123,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_LOPASS, 2)
                     EQS(LRX_BT, FLT_BT_LRX_LOPASS, 1)
                     EQS(LRX_MT, FLT_MT_LRX_LOPASS, 1)
+                    EQS(APO_DR, FLT_DR_APO_LOPASS, 1)
                     EQDFL
                 }
                 break;
@@ -135,6 +139,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_LOSHELF, 1)
                     EQS(LRX_BT, FLT_BT_LRX_LOSHELF, 1)
                     EQS(LRX_MT, FLT_MT_LRX_LOSHELF, 1)
+                    EQS(APO_DR, FLT_DR_APO_LOSHELF, 1)
                     EQDFL
                 }
                 break;
@@ -150,6 +155,23 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_RLC_NOTCH, 1)
                     EQS(LRX_BT, FLT_BT_RLC_NOTCH, 1)
                     EQS(LRX_MT, FLT_MT_RLC_NOTCH, 1)
+                    EQS(APO_DR, FLT_DR_APO_NOTCH, 1)
+                    EQDFL
+                }
+                break;
+            }
+
+            case EQF(ALLPASS):
+            {
+                switch (mode)
+                {
+                    EQS(RLC_BT, FLT_BT_RLC_ALLPASS, 1)
+                    EQS(RLC_MT, FLT_BT_RLC_ALLPASS, 1)
+                    EQS(BWC_BT, FLT_BT_BWC_ALLPASS, 2)
+                    EQS(BWC_MT, FLT_BT_BWC_ALLPASS, 2)
+                    EQS(LRX_BT, FLT_BT_LRX_ALLPASS, 1)
+                    EQS(LRX_MT, FLT_BT_LRX_ALLPASS, 1)
+                    EQS(APO_DR, FLT_DR_APO_ALLPASS, 1)
                     EQDFL
                 }
                 break;
@@ -165,12 +187,29 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_RLC_RESONANCE, 1)
                     EQS(LRX_BT, FLT_BT_RLC_RESONANCE, 1)
                     EQS(LRX_MT, FLT_MT_RLC_RESONANCE, 1)
+                    EQS(APO_DR, FLT_DR_APO_PEAKING, 1)
                     EQDFL
                 }
                 break;
             }
 
 #ifndef LSP_NO_EXPERIMENTAL
+            case EQF(ALLPASS2):
+            {
+                switch (mode)
+                {
+                    EQS(RLC_BT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(RLC_MT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(BWC_BT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(BWC_MT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(LRX_BT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(LRX_MT, FLT_BT_RLC_ALLPASS2, 1)
+                    EQS(APO_DR, FLT_DR_APO_ALLPASS2, 1)
+                    EQDFL
+                }
+                break;
+            }
+
             case EQF(LADDERPASS):
             {
                 switch (mode)
@@ -181,6 +220,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_LADDERPASS, 1)
                     EQS(LRX_BT, FLT_BT_LRX_LADDERPASS, 1)
                     EQS(LRX_MT, FLT_MT_LRX_LADDERPASS, 1)
+                    EQS(APO_DR, FLT_DR_APO_LADDERPASS, 1)
                     EQDFL
                 }
                 break;
@@ -196,6 +236,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_LADDERREJ, 1)
                     EQS(LRX_BT, FLT_BT_LRX_LADDERREJ, 1)
                     EQS(LRX_MT, FLT_MT_LRX_LADDERREJ, 1)
+                    EQS(APO_DR, FLT_DR_APO_LADDERREJ, 1)
                     EQDFL
                 }
                 break;
@@ -211,6 +252,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_RLC_ENVELOPE, 1)
                     EQS(LRX_BT, FLT_BT_RLC_ENVELOPE, 1)
                     EQS(LRX_MT, FLT_MT_RLC_ENVELOPE, 1)
+                    EQS(APO_DR, FLT_MT_RLC_ENVELOPE, 1)
                     EQDFL
                 }
                 break;
@@ -226,6 +268,7 @@ namespace lsp
                     EQS(BWC_MT, FLT_MT_BWC_BANDPASS, 1)
                     EQS(LRX_BT, FLT_BT_LRX_BANDPASS, 1)
                     EQS(LRX_MT, FLT_MT_LRX_BANDPASS, 1)
+                    EQS(APO_DR, FLT_DR_APO_BANDPASS, 1)
                     EQDFL
                 }
                 break;
@@ -250,14 +293,31 @@ namespace lsp
             case FLT_MT_RLC_HIPASS:
             case FLT_BT_RLC_NOTCH:
             case FLT_MT_RLC_NOTCH:
+            case FLT_BT_RLC_ALLPASS:
+            case FLT_MT_RLC_ALLPASS:
+            case FLT_BT_RLC_ALLPASS2:
+            case FLT_MT_RLC_ALLPASS2:
+
             case FLT_BT_BWC_LOPASS:
             case FLT_MT_BWC_LOPASS:
             case FLT_BT_BWC_HIPASS:
             case FLT_MT_BWC_HIPASS:
+            case FLT_BT_BWC_ALLPASS:
+            case FLT_MT_BWC_ALLPASS:
+
             case FLT_BT_LRX_LOPASS:
             case FLT_MT_LRX_LOPASS:
             case FLT_BT_LRX_HIPASS:
             case FLT_MT_LRX_HIPASS:
+            case FLT_BT_LRX_ALLPASS:
+            case FLT_MT_LRX_ALLPASS:
+
+            // Disable gain adjust for several APO filters, too
+            case FLT_DR_APO_NOTCH:
+            case FLT_DR_APO_LOPASS:
+            case FLT_DR_APO_HIPASS:
+            case FLT_DR_APO_ALLPASS:
+            case FLT_DR_APO_ALLPASS2:
                 return false;
             default:
                 break;
@@ -332,6 +392,7 @@ namespace lsp
             c->nLatency         = 0;
             c->fInGain          = 1.0f;
             c->fOutGain         = 1.0f;
+            c->fPitch           = 1.0f;
             c->vFilters         = NULL;
             c->vBuffer          = abuf;
             abuf               += EQ_BUFFER_SIZE;
@@ -349,9 +410,11 @@ namespace lsp
             c->pOut             = NULL;
             c->pInGain          = NULL;
             c->pTrAmp           = NULL;
+            c->pPitch           = NULL;
             c->pFft             = NULL;
             c->pVisible         = NULL;
-            c->pMeter           = NULL;
+            c->pInMeter         = NULL;
+            c->pOutMeter        = NULL;
         }
 
         // Allocate data
@@ -449,14 +512,19 @@ namespace lsp
             if ((nMode == EQ_STEREO) && (i > 0))
             {
                 vChannels[i].pTrAmp     =   NULL;
+                vChannels[i].pPitch     =   vChannels[i-1].pPitch;
             }
             else
             {
                 TRACE_PORT(vPorts[port_id]);
                 vChannels[i].pTrAmp     =   vPorts[port_id++];
+                TRACE_PORT(vPorts[port_id]);
+                vChannels[i].pPitch     =   vPorts[port_id++];
             }
             TRACE_PORT(vPorts[port_id]);
-            vChannels[i].pMeter     =   vPorts[port_id++];
+            vChannels[i].pInMeter      =   vPorts[port_id++];
+            TRACE_PORT(vPorts[port_id]);
+            vChannels[i].pOutMeter     =   vPorts[port_id++];
             TRACE_PORT(vPorts[port_id]);
             vChannels[i].pFft       =   vPorts[port_id++];
             if (channels > 1)
@@ -656,6 +724,7 @@ namespace lsp
             c->fOutGain         = bal[i];
             if (c->pInGain != NULL)
                 c->fInGain          = c->pInGain->getValue();
+            c->fPitch           = expf((M_LN2 * c->pPitch->getValue()) / 12.0f);
 
             // Update each filter configuration (step 1)
             for (size_t j=0; j<nFilters; ++j)
@@ -683,9 +752,10 @@ namespace lsp
 
                 // Fetch filter params
                 c->sEqualizer.get_params(j, &fp);
+                float freq          = f->pFreq->getValue() * c->fPitch;
                 bool update         =
                         (fp.nType != ft) ||
-                        (fp.fFreq != f->pFreq->getValue()) ||
+                        (fp.fFreq != freq) ||
                         (fp.fGain != f->pGain->getValue()) ||
                         (fp.nSlope != slope) ||
                         (fp.fQuality != f->pQuality->getValue());
@@ -695,7 +765,7 @@ namespace lsp
                 {
 //                    modified            = true;
                     fp.nType            = ft;
-                    fp.fFreq            = f->pFreq->getValue();
+                    fp.fFreq            = freq;
                     #ifdef LSP_NO_EXPERIMENTAL
                         fp.fFreq2           = fp.fFreq;
                     #else
@@ -760,26 +830,39 @@ namespace lsp
             // Pre-process data
             if (nMode == EQ_MID_SIDE)
             {
+                if (!bListen)
+                {
+                    vChannels[0].pInMeter->setValue(dsp::abs_max(vChannels[0].vIn, to_process));
+                    vChannels[1].pInMeter->setValue(dsp::abs_max(vChannels[1].vIn, to_process));
+                }
                 dsp::lr_to_ms(vChannels[0].vBuffer, vChannels[1].vBuffer, vChannels[0].vIn, vChannels[1].vIn, to_process);
+                if (bListen)
+                {
+                    vChannels[0].pInMeter->setValue(dsp::abs_max(vChannels[0].vBuffer, to_process));
+                    vChannels[1].pInMeter->setValue(dsp::abs_max(vChannels[1].vBuffer, to_process));
+                }
                 if (fGainIn != 1.0f)
                 {
-                    dsp::scale2(vChannels[0].vBuffer, fGainIn, to_process);
-                    dsp::scale2(vChannels[1].vBuffer, fGainIn, to_process);
+                    dsp::mul_k2(vChannels[0].vBuffer, fGainIn, to_process);
+                    dsp::mul_k2(vChannels[1].vBuffer, fGainIn, to_process);
                 }
             }
             else if (nMode == EQ_MONO)
             {
+                vChannels[0].pInMeter->setValue(dsp::abs_max(vChannels[0].vIn, to_process));
                 if (fGainIn != 1.0f)
-                    dsp::scale3(vChannels[0].vBuffer, vChannels[0].vIn, fGainIn, to_process);
+                    dsp::mul_k3(vChannels[0].vBuffer, vChannels[0].vIn, fGainIn, to_process);
                 else
                     dsp::copy(vChannels[0].vBuffer, vChannels[0].vIn, to_process);
             }
             else
             {
+                vChannels[0].pInMeter->setValue(dsp::abs_max(vChannels[0].vIn, to_process));
+                vChannels[1].pInMeter->setValue(dsp::abs_max(vChannels[1].vIn, to_process));
                 if (fGainIn != 1.0f)
                 {
-                    dsp::scale3(vChannels[0].vBuffer, vChannels[0].vIn, fGainIn, to_process);
-                    dsp::scale3(vChannels[1].vBuffer, vChannels[1].vIn, fGainIn, to_process);
+                    dsp::mul_k3(vChannels[0].vBuffer, vChannels[0].vIn, fGainIn, to_process);
+                    dsp::mul_k3(vChannels[1].vBuffer, vChannels[1].vIn, fGainIn, to_process);
                 }
                 else
                 {
@@ -800,7 +883,7 @@ namespace lsp
                 // Process the signal by the equalizer
                 c->sEqualizer.process(c->vBuffer, c->vBuffer, to_process);
                 if (c->fInGain != 1.0f)
-                    dsp::scale2(c->vBuffer, c->fInGain, to_process);
+                    dsp::mul_k2(c->vBuffer, c->fInGain, to_process);
 
                 // Do FFT in 'POST'-position
                 if (fft_pos == FFTP_POST)
@@ -818,11 +901,11 @@ namespace lsp
 
                 // Apply output gain
                 if (c->fOutGain != 1.0f)
-                    dsp::scale2(c->vBuffer, c->fOutGain, to_process);
+                    dsp::mul_k2(c->vBuffer, c->fOutGain, to_process);
 
-                // Do metering
-                if (c->pMeter != NULL)
-                    c->pMeter->setValue(dsp::abs_max(c->vBuffer, to_process));
+                // Do output metering
+                if (c->pOutMeter != NULL)
+                    c->pOutMeter->setValue(dsp::abs_max(c->vBuffer, to_process));
 
                 // Process via bypass
                 c->sBypass.process(c->vOut, c->vIn, c->vBuffer, to_process);
@@ -924,7 +1007,7 @@ namespace lsp
                 for (size_t j=0; j<nFilters; ++j)
                 {
                     eq_filter_t *f  = &c->vFilters[j];
-                    dsp::complex_mul3(c->vTrRe, c->vTrIm, c->vTrRe, c->vTrIm, f->vTrRe, f->vTrIm, para_equalizer_base_metadata::MESH_POINTS);
+                    dsp::complex_mul2(c->vTrRe, c->vTrIm, f->vTrRe, f->vTrIm, para_equalizer_base_metadata::MESH_POINTS);
                 }
                 c->nSync    = CS_SYNC_AMP;
             }

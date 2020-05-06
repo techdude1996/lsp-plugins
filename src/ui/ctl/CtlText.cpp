@@ -11,8 +11,11 @@ namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlText::metadata = { "CtlText", &CtlWidget::metadata };
+
         CtlText::CtlText(CtlRegistry *src, LSPText *text): CtlWidget(src, text)
         {
+            pClass          = &metadata;
         }
 
         CtlText::~CtlText()
@@ -21,10 +24,10 @@ namespace lsp
 
         void CtlText::update_coords()
         {
-            if (pWidget == NULL)
+            LSPText *text       = widget_cast<LSPText>(pWidget);
+            if (text == NULL)
                 return;
 
-            LSPText *text       = static_cast<LSPText *>(pWidget);
             if (!sCoord.valid())
                 return;
 
@@ -47,10 +50,10 @@ namespace lsp
         void CtlText::init()
         {
             CtlWidget::init();
-            if (pWidget == NULL)
-                return;
 
-            LSPText *text       = static_cast<LSPText *>(pWidget);
+            LSPText *text       = widget_cast<LSPText>(pWidget);
+            if (text == NULL)
+                return;
 
             // Initialize controllers
             sColor.init_hsl(pRegistry, text, text->font()->color(), A_COLOR, A_HUE_ID, A_SAT_ID, A_LIGHT_ID);
@@ -63,9 +66,18 @@ namespace lsp
             update_coords();
         }
 
+        void CtlText::set(const char *name, const char *value)
+        {
+            LSPText *text = widget_cast<LSPText>(pWidget);
+            if (text != NULL)
+                set_lc_attr(A_TEXT, text->text(), name, value);
+
+            CtlWidget::set(name, value);
+        }
+
         void CtlText::set(widget_attribute_t att, const char *value)
         {
-            LSPText *text = (pWidget != NULL) ? static_cast<LSPText *>(pWidget) : NULL;
+            LSPText *text = widget_cast<LSPText>(pWidget);
 
             switch (att)
             {
@@ -91,15 +103,10 @@ namespace lsp
                     if (text != NULL)
                         PARSE_FLOAT(value, text->font()->set_size(__));
                     break;
-                case A_TEXT:
-                    if (text != NULL)
-                        text->set_text(value);
-                    break;
                 default:
                 {
-                    bool set = sColor.set(att, value);
-                    if (!set)
-                        CtlWidget::set(att, value);
+                    sColor.set(att, value);
+                    CtlWidget::set(att, value);
                     break;
                 }
             }

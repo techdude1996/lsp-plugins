@@ -13,7 +13,10 @@ namespace lsp
     {
         const w_class_t LSPText::metadata = { "LSPText", &LSPGraphItem::metadata };
 
-        LSPText::LSPText(LSPDisplay *dpy): LSPGraphItem(dpy), sFont(dpy, this)
+        LSPText::LSPText(LSPDisplay *dpy):
+            LSPGraphItem(dpy),
+            sText(this),
+            sFont(dpy, this)
         {
             nCoords             = 0;
             vCoords             = NULL;
@@ -47,6 +50,8 @@ namespace lsp
 
         status_t LSPText::init()
         {
+            sText.bind();
+
             status_t result = LSPGraphItem::init();
             if (result != STATUS_OK)
                 return result;
@@ -160,12 +165,21 @@ namespace lsp
 
         void LSPText::render(ISurface *s, bool force)
         {
-            if ((sText.is_empty()) || (vCoords == NULL))
+            if (vCoords == NULL)
+                return;
+
+            LSPString text;
+            sText.format(&text);
+            if (text.is_empty())
                 return;
 
             LSPGraph *cv = graph();
             if (cv == NULL)
                 return;
+
+            // Get palette
+            Color font_color(sFont.raw_color());
+            font_color.scale_lightness(brightness());
 
             // Get center
             float x = 0.0f, y = 0.0f;
@@ -189,20 +203,20 @@ namespace lsp
             text_parameters_t tp;
 
             sFont.get_parameters(s, &fp);
-            sFont.get_multiline_text_parameters(s, &tp, &sText);
+            sFont.get_multiline_text_parameters(s, &tp, &text);
 
             // Center point
-            ssize_t n_lines = 1 + sText.count('\n');
+            ssize_t n_lines = 1 + text.count('\n');
             ssize_t ty      = y - fp.Height * n_lines * (fVAlign + 1.0f)*0.5f - fp.Descent;
             ssize_t tw      = tp.Width;
 
             // Estimate text size
-            ssize_t last = 0, curr = 0, tail = 0, len = sText.length();
+            ssize_t last = 0, curr = 0, tail = 0, len = text.length();
 
             while (curr < len)
             {
                 // Get next line indexes
-                curr    = sText.index_of(last, '\n');
+                curr    = text.index_of(last, '\n');
                 if (curr < 0)
                 {
                     curr        = len;
@@ -211,34 +225,19 @@ namespace lsp
                 else
                 {
                     tail        = curr;
-                    if ((tail > last) && (sText.at(tail-1) == '\r'))
+                    if ((tail > last) && (text.at(tail-1) == '\r'))
                         --tail;
                 }
 
                 // Calculate text location
-                sFont.get_text_parameters(s, &tp, &sText, last, tail);
+                sFont.get_text_parameters(s, &tp, &text, last, tail);
                 ssize_t tx  = x + (tw - tp.Width*0.5f)*(fHAlign - 1.0f) + fHAlign*2.0f;
                 ty         += fp.Height;
-                sFont.draw(s, tx, ty, &sText, last, tail);
+                sFont.draw(s, tx, ty, font_color, &text, last, tail);
 
                 last    = curr + 1;
             }
         }
 
-        status_t LSPText::set_text(const char *text)
-        {
-            if (!sText.set_native(text))
-                return STATUS_NO_MEM;
-            query_resize();
-            return STATUS_OK;
-        };
-
-        status_t LSPText::set_text(const LSPString *text)
-        {
-            if (!sText.set(text))
-                return STATUS_NO_MEM;
-            query_resize();
-            return STATUS_OK;
-        }
     } /* namespace tk */
 } /* namespace lsp */

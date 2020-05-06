@@ -5,12 +5,13 @@
  *      Author: sadko
  */
 
-#include <string.h>
-
 #include <core/types.h>
 #include <core/debug.h>
 #include <dsp/dsp.h>
 #include <test/test.h>
+
+#include <core/stdlib/string.h>
+#include <core/stdlib/stdio.h>
 
 #include <dsp/arch/x86/features.h>
 #include <dsp/arch/x86/float.h>
@@ -53,6 +54,36 @@ namespace avx2
 
 namespace x86
 {
+#pragma pack(push, 1)
+    typedef union vendor_sig_t
+    {
+        char    sig[12];
+        struct {
+            uint32_t    ebx, edx, ecx;
+        } reg;
+    } vendor_sig_t;
+#pragma pack(pop)
+
+    typedef struct cpu_vendor_id_t
+    {
+        const char *signature;
+        size_t      vendor_id;
+    } vendors_t;
+
+
+    static const cpu_vendor_id_t cpu_vendor_ids[] =
+    {
+        { "AMDisbetter!", CPU_VENDOR_AMD },
+        { "AuthenticAMD", CPU_VENDOR_AMD },
+        { "CentaurHauls", CPU_VENDOR_VIA },
+        { "Geode by NSC", CPU_VENDOR_NSC },
+        { "GenuineIntel", CPU_VENDOR_INTEL },
+        { "GenuineTMx86", CPU_VENDOR_TRANSMETA },
+        { "HygonGenuine", CPU_VENDOR_HYGON },
+        { "TransmetaCPU", CPU_VENDOR_TRANSMETA },
+        { "VIA VIA VIA ", CPU_VENDOR_VIA }
+    };
+
     void read_brand_string(cpuid_info_t *info, uint32_t max_ext_cpuid, char *brand)
     {
         // FUNCTION 0x80000002 - 0x80000004
@@ -275,10 +306,19 @@ namespace x86
         cpuid(&info, 0, 0);
 
         // Detect vendor
-        if ((info.ebx == X86_CPUID0_INTEL_EBX) && (info.ecx == X86_CPUID0_INTEL_ECX) && (info.edx == X86_CPUID0_INTEL_EDX))
-            f->vendor   = CPU_VENDOR_INTEL;
-        else if ((info.ebx == X86_CPUID0_AMD_EBX) && (info.ecx == X86_CPUID0_AMD_ECX) && (info.edx == X86_CPUID0_AMD_EDX))
-            f->vendor   = CPU_VENDOR_AMD;
+        vendor_sig_t sig;
+        sig.reg.ebx     = info.ebx;
+        sig.reg.ecx     = info.ecx;
+        sig.reg.edx     = info.edx;
+
+        for (size_t i=0, n=sizeof(cpu_vendor_ids)/sizeof(cpu_vendor_id_t); i<n; ++i)
+        {
+            if (!memcmp(sig.sig, cpu_vendor_ids[i].signature, sizeof(vendor_sig_t)))
+            {
+                f->vendor   = cpu_vendor_ids[i].vendor_id;
+                break;
+            }
+        }
 
         size_t max_cpuid    = info.eax;
         if (max_cpuid <= 0)
@@ -298,10 +338,20 @@ namespace x86
         cpuid(&info, 0x80000000, 0);
         size_t max_ext_cpuid = info.eax;
 
-        if (f->vendor == CPU_VENDOR_INTEL)
-            do_intel_cpuid(f, max_cpuid, max_ext_cpuid);
-        else if (f->vendor == CPU_VENDOR_AMD)
-            do_amd_cpuid(f, max_cpuid, max_ext_cpuid);
+        switch (f->vendor)
+        {
+            case CPU_VENDOR_INTEL:
+                do_intel_cpuid(f, max_cpuid, max_ext_cpuid);
+                break;
+
+            case CPU_VENDOR_AMD:
+            case CPU_VENDOR_HYGON:
+                do_amd_cpuid(f, max_cpuid, max_ext_cpuid);
+                break;
+
+            default:
+                break;
+        }
     }
 
     static dsp::start_t     dsp_start       = NULL;
@@ -324,7 +374,13 @@ namespace x86
 
     static const char *cpu_vendors[] =
     {
-        "Unknown", "Intel", "AMD"
+        "Unknown",
+        "AMD",
+        "Hygon",
+        "Intel",
+        "NSC",
+        "Transmeta",
+        "VIA"
     };
 
     static const char *cpu_features[] =
@@ -385,8 +441,8 @@ namespace x86
         detect_options(&f);
 
         char *model     = NULL;
-        asprintf(&model, "vendor=%s, family=0x%x, model=0x%x", cpu_vendors[f.vendor], int(f.family), int(f.model));
-        if (model == NULL)
+        int n = asprintf(&model, "vendor=%s, family=0x%x, model=0x%x", cpu_vendors[f.vendor], int(f.family), int(f.model));
+        if ((n < 0) || (model == NULL))
             return NULL;
 
         size_t size     = sizeof(dsp::info_t);
@@ -430,8 +486,13 @@ namespace x86
             case FEAT_FAST_AVX:
                 if (f->vendor == CPU_VENDOR_INTEL) // Any Intel CPU is good enough with AVX
                     return true;
-                if (f->vendor == CPU_VENDOR_AMD)
+                if ((f->vendor == CPU_VENDOR_AMD) || (f->vendor == CPU_VENDOR_HYGON))
                     return (f->family >= AMD_FAMILY_ZEN); // Only starting with ZEN architecture AMD's implementation of AVX is fast enough
+                break;
+            case FEAT_FAST_FMA3:
+                if (f->vendor == CPU_VENDOR_INTEL) // Any Intel CPU is good enough with AVX
+                    return true;
+                // AMD: maybe once FMA3 will be faster
                 break;
             default:
                 break;
@@ -461,15 +522,8 @@ namespace x86
         EXPORT1(info);
 
         EXPORT1(copy);
-        EXPORT1(copy_saturated);
-        EXPORT1(saturate);
         EXPORT1(rgba32_to_bgra32);
-
-        if (f.features & CPU_OPTION_CMOV)
-        {
-            EXPORT2(copy_saturated, copy_saturated_cmov);
-            EXPORT2(saturate, saturate_cmov);
-        }
+        EXPORT1(abgr32_to_bgra32);
 
         // Initialize extensions
         sse::dsp_init(&f);

@@ -11,26 +11,32 @@ namespace lsp
 {
     namespace ctl
     {
+        const ctl_class_t CtlEdit::metadata = { "CtlEdit", &CtlWidget::metadata };
+
         CtlEdit::CtlEdit(CtlRegistry *src, LSPEdit *widget): CtlWidget(src, widget)
         {
-            pDialog = NULL;
+            pClass          = &metadata;
+            pDialog         = NULL;
 
             char str[40];
             LSPMenu *menu = new LSPMenu(widget->display());
+            vWidgets.add(menu);
             menu->init();
 
             for (size_t i=0; i<50; ++i)
             {
                 LSPMenuItem *item = new LSPMenuItem(widget->display());
+                vWidgets.add(item);
                 item->init();
                 sprintf(str, "Menu item %d", int(i));
-                item->set_text(str);
+                item->text()->set_raw(str);
                 menu->add(item);
                 item->slots()->bind(LSPSLOT_SUBMIT, slot_on_submit, this);
 
                 if ((i%5) == 4)
                 {
                     item = new LSPMenuItem(widget->display());
+                    vWidgets.add(item);
                     item->init();
                     item->set_separator(true);
                     menu->add(item);
@@ -42,6 +48,16 @@ namespace lsp
         
         CtlEdit::~CtlEdit()
         {
+            for (size_t i=0, n=vWidgets.size(); i<n; ++i)
+            {
+                LSPWidget *w = vWidgets.at(i);
+                if (w != NULL)
+                {
+                    w->destroy();
+                    delete w;
+                }
+            }
+            vWidgets.clear();
         }
 
         status_t CtlEdit::slot_on_submit(LSPWidget *sender, void *ptr, void *data)
@@ -68,17 +84,32 @@ namespace lsp
             {
                 pDialog     = new LSPFileDialog(pWidget->display());
                 pDialog->init();
-                pDialog->set_title("Open file...");
-                pDialog->set_action_title("Open");
+                pDialog->title()->set_raw("Open file...");
+                pDialog->action_title()->set("actions.open");
                 pDialog->bind_action(slot_on_action, this);
                 pDialog->bind_cancel(slot_on_cancel, this);
-                pDialog->set_confirmation("Do you really want to load file?");
+                pDialog->set_use_confirm(true);
+                pDialog->confirm()->set("messages.file.confirm_load");
 
                 LSPFileFilter *f = pDialog->filter();
+                {
+                    LSPFileFilterItem ffi;
 
-                f->add("*.txt", "Text files", ".txt");
-                f->add("*.wav|*.mp3", "Audio files", ".wav");
-                f->add("*", "All files", "");
+                    ffi.pattern()->set("*.txt");
+                    ffi.title()->set("files.text.txt");
+                    ffi.set_extension(".txt");
+                    f->add(&ffi);
+
+                    ffi.pattern()->set("*.wav|*.mp3");
+                    ffi.title()->set("files.audio.all");
+                    ffi.set_extension(".wav");
+                    f->add(&ffi);
+
+                    ffi.pattern()->set("*");
+                    ffi.title()->set("files.all");
+                    ffi.set_extension("");
+                    f->add(&ffi);
+                }
                 f->set_default(2);
             }
 

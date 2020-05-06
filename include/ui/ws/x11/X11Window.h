@@ -40,6 +40,7 @@ namespace lsp
                     size_t              nScreen;
                     size_t              nFlags;
                     mouse_pointer_t     enPointer;
+                    bool                bWrapper;
 //                    IClipboard         *pClipboard[_CBUF_TOTAL];
 
                     realize_t           sSize;
@@ -57,7 +58,7 @@ namespace lsp
                     status_t    do_update_constraints();
 
                 public:
-                    X11Window(X11Display *core, size_t screen, ::Window wnd, IEventHandler *handler = NULL);
+                    explicit X11Window(X11Display *core, size_t screen, ::Window wnd, IEventHandler *handler, bool wrapper);
                     virtual ~X11Window();
 
                     /** Window initialization routine
@@ -125,9 +126,11 @@ namespace lsp
                      */
                     virtual size_t screen();
 
-                    virtual status_t set_caption(const char *text);
+                    virtual status_t set_caption(const char *ascii, const char *utf8);
 
                     inline ::Window x11handle() const { return hWindow; }
+
+                    inline ::Window x11parent() const { return hParent; }
 
                 public:
                     /** Handle X11 event
@@ -204,6 +207,19 @@ namespace lsp
                     virtual status_t show();
 
                     virtual status_t show(INativeWindow *over);
+
+                    /**
+                     * Grab events from the screen
+                     * @param group grab group
+                     * @return status of operation
+                     */
+                    virtual status_t grab_events(grab_t group);
+
+                    /**
+                     * Ungrab currently selected group of events
+                     * @return status of operation
+                     */
+                    virtual status_t ungrab_events();
 
                     /** Set left coordinate of the window
                      *
@@ -310,6 +326,20 @@ namespace lsp
                      */
                     virtual mouse_pointer_t get_mouse_pointer();
 
+                    /**
+                     * Set window class
+                     * @param instance window instance, ASCII-string
+                     * @param wclass window class, ASCII-string
+                     * @return status of operation
+                     */
+                    virtual status_t set_class(const char *instance, const char *wclass);
+
+                    /**
+                     * Set window role
+                     * @param wrole window role, ASCII-string
+                     * @return status of operation
+                     */
+                    virtual status_t set_role(const char *wrole);
             };
         }
     
